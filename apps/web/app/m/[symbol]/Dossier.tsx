@@ -48,7 +48,9 @@ export function Dossier({ symbol }: { symbol: string }) {
   const trade = d?.trades.find((t) => t.forecastId === d.forecast?.id) ?? d?.trades[0] ?? null;
   const tradePolicy = policy ?? (trade ? { ok: trade.policyOk, reason: trade.policyReason, edgeBps: trade.edgeBps, notionalCents: trade.notionalCents } : null);
 
-  const side = d?.forecast && d.tick ? (d.forecast.pBps >= d.tick.midBps ? "YES" : "NO") : null;
+  // the side actually traded for this forecast wins over the side implied by today's moving price
+  const tradedSide = d?.forecast ? d.trades?.find((t) => t.forecastId === d.forecast!.id && t.state !== "refused")?.outcome : undefined;
+  const side = tradedSide ? (tradedSide === "yes" ? "YES" : "NO") : d?.forecast && d.tick ? (d.forecast.pBps >= d.tick.midBps ? "YES" : "NO") : null;
   const gap = d?.forecast && d.tick ? (d.forecast.pBps - d.tick.midBps) / 100 : null;
   return (
     <motion.div {...page} className="mx-auto max-w-[1280px] px-4 pb-16 pt-6 sm:px-6">

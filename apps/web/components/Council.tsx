@@ -24,7 +24,7 @@ export function CouncilChamber({ forecast, live, running }: { forecast: Forecast
           const buf = live[p.key];
           const out = !running ? forecast?.personas[p.key] : undefined;
           const text = out?.argument || (buf != null ? argumentOf(buf) : "");
-          const prob = buf != null ? probOf(buf) : out?.probability ?? null;
+          const prob = out?.probability ?? (buf != null ? probOf(buf) : null);
           const streaming = running && buf != null;
           return (
             <motion.article key={p.key} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: [0, 6, 6, 0][i] }} transition={{ delay: i * 0.04 }}
