@@ -116,9 +116,11 @@ function Row({ t, explorer }: { t: Trade; explorer: string | null }) {
       <td className="num px-4 py-2 text-xs">{t.quantity} {t.outcome.toUpperCase()} @ {pct(t.priceBps, 0)}</td>
       <td className="num px-4 py-2 text-xs">{t.edgeBps} bps</td>
       <td className="num px-4 py-2 text-xs">{usd(t.notionalCents)}</td>
-      <td className="px-4 py-2 text-xs">{t.authorizeTx ? <Hash value={t.authorizeTx} href={explorer ? explorer + t.authorizeTx : null} /> : t.state === "refused" ? <span className="text-refused">blocked</span> : "—"}</td>
+      {t.state === "refused" ? <td colSpan={3} className="px-4 py-2 text-xs text-refused">{blocked(t.policyReason)}</td> : (<>
+      <td className="px-4 py-2 text-xs">{t.authorizeTx ? <Hash value={t.authorizeTx} href={explorer ? explorer + t.authorizeTx : null} /> : "—"}</td>
       <td className="num px-4 py-2 text-xs">{t.orderId ?? "—"}{t.orderStatus && <span className="ml-1 text-muted">{t.orderStatus}</span>}</td>
-      <td className="px-4 py-2 text-xs">{t.state === "refused" ? <span className="text-refused">{blocked(t.policyReason)}</span> : t.state === "failed" && !t.recordTx ? <span className="text-refused">{t.error}</span> : t.recordTx ? <Hash value={t.recordTx} href={explorer ? explorer + t.recordTx : null} /> : <span className="text-muted">{t.state}</span>}</td>
+      <td className="px-4 py-2 text-xs">{t.state === "failed" && !t.recordTx ? <span className="text-refused">{t.error}</span> : t.recordTx ? <Hash value={t.recordTx} href={explorer ? explorer + t.recordTx : null} /> : <span className="text-muted">{t.state}</span>}</td>
+      </>)}
     </tr>
   );
 }
