@@ -1,0 +1,210 @@
+import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
+import { join } from "node:path";
+import { randomUUID } from "node:crypto";
+import { createClient, HmacAuth } from "@gemini-markets/sdk/server";
+import type { Category, Source } from "@cassandra/shared";
+import { config } from "../config.js";
+import { log } from "../bus.js";
+
+export type GeminiClient = Awaited<ReturnType<typeof createClient>>;
+type RawEvent = NonNullable<Awaited<ReturnType<GeminiClient["predictions"]["listEvents"]>>["data"]>[number];
+type RawContract = NonNullable<RawEvent["contracts"]>[number];
+
+export interface DiscoveredContract {
+  symbol: string; eventTicker: string; label: string; category: Category; expiryDate: string | null; status: string;
+  resolutionSide: string | null; resolvedAt: string | null; quote: Quote | null;
+}
+export interface DiscoveredEvent {
+  ticker: string; title: string; description: string | null; category: Category; rawCategory: string; status: string;
+  volume: number; expiryDate: string | null; exclusive: boolean; contracts: DiscoveredContract[];
+}
+export interface Quote { symbol: string; bidBps: number | null; askBps: number | null; noAskBps: number | null; midBps: number; lastBps: number | null; volume: number | null; ts: number; source: Source }
+
+const FIXTURES = join(config.fixturesDir, "gemini");
+export const geminiSource: Source = config.gemini.dryRun ? "fixture" : "live";
+
+/** Decimal string → integer basis points. The only place price strings are parsed. */
+export const toBps = (s: string | null | undefined): number | null => {
+  if (s == null || s === "") return null;
+  const n = Number(s);
+  return Number.isFinite(n) ? Math.round(n * 10000) : null;
+};
+export const fromBps = (bps: number) => (bps / 10000).toFixed(2);
+
+export function mapCategory(raw: string | undefined, title = ""): Category {
+  const s = `${raw ?? ""} ${title}`.toLowerCase();
+  if (/politic|election|senate|house|president|midterm/.test(s)) return "politics";
+  if (/sport|nfl|nba|mlb|nhl|soccer|football|tennis|ufc/.test(s)) return "sports";
+  if (/crypto|btc|eth|sol|bitcoin|ether/.test(s)) return "crypto";
+  if (/econ|fed|cpi|rate|inflation|gdp|jobs/.test(s)) return "economics";
+  if (/commod|gold|oil|silver|wti/.test(s)) return "commodities";
+  if (/weather|temperature|hurricane/.test(s)) return "weather";
+  if (/culture|entertain|movie|music|award/.test(s)) return "culture";
+  return "other";
+}
+
+function quoteFromPrices(symbol: string, k: RawContract, ts: number): Quote | null {
+  const p = k.prices;
+  if (!p) return null;
+  const bid = toBps(p.bestBid), ask = toBps(p.bestAsk), last = toBps(p.lastTradePrice);
+  const noAsk = toBps(p.buy?.no);
+  const mid = bid != null && ask != null ? Math.round((bid + ask) / 2) : last ?? null;
+  if (mid == null) return null;
+  return { symbol, bidBps: bid, askBps: ask, noAskBps: noAsk, midBps: mid, lastBps: last, volume: null, ts, source: geminiSource };
+}
+
+function mapEvent(e: RawEvent, ts: number): DiscoveredEvent {
+  const category = mapCategory(e.category, e.title);
+  const contracts = (e.contracts ?? []).filter((k) => k.instrumentSymbol).map((k) => ({
+    symbol: k.instrumentSymbol!, eventTicker: e.ticker ?? "", label: k.label ?? k.instrumentSymbol!, category,
+    expiryDate: k.expiryDate ?? e.expiryDate ?? null, status: String(k.status ?? e.status ?? "active"),
+    resolutionSide: (k.resolutionSide as string | undefined) ?? null, resolvedAt: k.resolvedAt ?? null,
+    quote: quoteFromPrices(k.instrumentSymbol!, k, ts),
+  }));
+  return {
+    ticker: e.ticker ?? "", title: e.title ?? e.ticker ?? "", description: e.description ?? null, category, rawCategory: e.category ?? "",
+    status: String(e.status ?? "active"), volume: Number(e.volume ?? 0) || 0, expiryDate: e.expiryDate ?? null,
+    // Strike ladders ("BTC above X") are nested, not mutually exclusive; categorical events are.
+    exclusive: String(e.type ?? "").toLowerCase() === "categorical" && !(e.contracts ?? []).some((k) => k.strike || /-(HI|LO)\d/.test(k.instrumentSymbol ?? "")), contracts,
+  };
+}
+
+const json = (v: unknown) => JSON.stringify(v, (_k, x) => (typeof x === "bigint" ? x.toString() : x), 2);
+function readFixture<T>(name: string): T {
+  const f = join(FIXTURES, `${name}.json`);
+  if (!existsSync(f)) throw new Error(`fixture ${name} missing; run pnpm capture with live keys`);
+  return JSON.parse(readFileSync(f, "utf8")) as T;
+}
+export function writeFixture(name: string, data: unknown) {
+  mkdirSync(FIXTURES, { recursive: true });
+  writeFileSync(join(FIXTURES, `${name}.json`), json(data));
+}
+
+let clientP: Promise<GeminiClient> | null = null;
+export function client(): Promise<GeminiClient> {
+  if (config.gemini.dryRun) throw new Error("Gemini is in fixture mode");
+  clientP ??= createClient({
+    env: "sandbox",
+    auth: new HmacAuth({ apiKey: config.gemini.apiKey, apiSecret: config.gemini.apiSecret, nonceMode: "time-based" }),
+    skipWsInit: true,
+  });
+  return clientP;
+}
+
+export async function rawActiveEvents(): Promise<RawEvent[]> {
+  if (config.gemini.dryRun) return readFixture<RawEvent[]>("events");
+  const c = await client();
+  const out: RawEvent[] = [];
+  for (let offset = 0; offset < 1000; offset += 100) {
+    const r = await c.predictions.listEvents({ status: ["active"], limit: 100, offset });
+    out.push(...(r.data ?? []));
+    if ((r.data ?? []).length < 100) break;
+  }
+  return out;
+}
+
+export async function discover(): Promise<DiscoveredEvent[]> {
+  const ts = Date.now();
+  return (await rawActiveEvents()).map((e) => mapEvent(e, ts));
+}
+
+export async function contractsOf(eventTicker: string): Promise<DiscoveredEvent> {
+  if (config.gemini.dryRun) {
+    const e = readFixture<RawEvent[]>("events").find((x) => x.ticker === eventTicker);
+    if (!e) throw new Error(`event ${eventTicker} not in fixtures`);
+    return mapEvent(e, Date.now());
+  }
+  const c = await client();
+  return mapEvent((await c.predictions.getEvent({ eventTicker })) as RawEvent, Date.now());
+}
+
+type Book = { bids: { price: string; amount: string }[]; asks: { price: string; amount: string }[] };
+/** Best bid/ask from the order book; the YES book's bid implies the NO ask (1 − bid). */
+export async function quote(symbol: string): Promise<Quote | null> {
+  const ts = Date.now();
+  let book: Book;
+  if (config.gemini.dryRun) {
+    const all = readFixture<Record<string, Book>>("books");
+    if (!all[symbol]) return null;
+    book = all[symbol]!;
+  } else {
+    const c = await client();
+    book = (await c.marketData.getCurrentOrderBook({ symbol })) as unknown as Book;
+  }
+  const bid = book.bids.length ? Math.max(...book.bids.map((b) => toBps(b.price) ?? 0)) : null;
+  const ask = book.asks.length ? Math.min(...book.asks.map((a) => toBps(a.price) ?? 10000)) : null;
+  if (bid == null && ask == null) return null;
+  const mid = bid != null && ask != null ? Math.round((bid + ask) / 2) : (bid ?? ask)!;
+  const depth = [...book.bids, ...book.asks].reduce((s, l) => s + Number(l.amount) * Number(l.price), 0);
+  return { symbol, bidBps: bid, askBps: ask, noAskBps: bid != null ? 10000 - bid : null, midBps: mid, lastBps: null, volume: Math.round(depth * 100) / 100, ts, source: geminiSource };
+}
+
+export async function rawBook(symbol: string): Promise<Book> {
+  return (await (await client()).marketData.getCurrentOrderBook({ symbol })) as unknown as Book;
+}
+export async function rawSettled(): Promise<RawEvent[]> {
+  return ((await (await client()).predictions.listRecentlySettledEvents({ limit: 100 })).data ?? []) as RawEvent[];
+}
+
+export async function books(symbols: string[]): Promise<Record<string, Book>> {
+  const c = await client();
+  const out: Record<string, Book> = {};
+  for (const s of symbols) out[s] = (await c.marketData.getCurrentOrderBook({ symbol: s })) as unknown as Book;
+  return out;
+}
+
+export async function settled(since: number): Promise<DiscoveredEvent[]> {
+  const raw = config.gemini.dryRun
+    ? readFixture<RawEvent[]>("settled")
+    : ((await (await client()).predictions.listRecentlySettledEvents({ limit: 100 })).data ?? []) as RawEvent[];
+  return raw.filter((e) => !e.resolvedAt || Date.parse(e.resolvedAt) >= since).map((e) => mapEvent(e, Date.now()));
+}
+
+export interface PlacedOrder { orderId: string; status: string; filledQuantity: string; clientOrderId: string; raw: unknown }
+
+/** One immediate-or-cancel limit order. Never retried blindly: callers store the attempt first and reconcile via orderHistory(). */
+export async function placeIoc(p: { symbol: string; outcome: "yes" | "no"; priceBps: number; quantity: number; clientOrderId?: string }): Promise<PlacedOrder> {
+  if (config.gemini.dryRun) throw new Error("Gemini is in fixture mode; no orders are placed");
+  const c = await client();
+  const clientOrderId = p.clientOrderId ?? randomUUID();
+  const input = {
+    symbol: p.symbol, orderType: "limit" as const, side: "buy" as const, outcome: p.outcome, quantity: String(p.quantity),
+    price: fromBps(p.priceBps), timeInForce: "immediate-or-cancel" as const, makerOrCancel: false, clientOrderId, account: config.gemini.account,
+  };
+  let r;
+  try {
+    r = await c.predictions.placeOrder(input);
+  } catch (err) {
+    const e = err as { name?: string; field?: string; rule?: string; message?: string };
+    if (e.name === "AcceptTermsRequiredError" || /AcceptTerms/i.test(`${e.name} ${e.message}`)) {
+      log("warn", "Gemini terms not accepted; accepting once and retrying");
+      await c.predictions.acceptTerms({ account: config.gemini.account } as never);
+      r = await c.predictions.placeOrder(input);
+    } else {
+      if (e.name === "ValidationError") log("error", `Gemini ValidationError field=${e.field} rule=${e.rule}`);
+      throw err;
+    }
+  }
+  const o = r as unknown as { orderId: bigint | string; status: string; filledQuantity?: string };
+  return { orderId: String(o.orderId), status: o.status, filledQuantity: o.filledQuantity ?? "0", clientOrderId, raw: JSON.parse(json(r)) };
+}
+
+export async function orderHistory(symbol?: string): Promise<{ orderId: string; clientOrderId?: string; status: string; filledQuantity?: string }[]> {
+  if (config.gemini.dryRun) return [];
+  const c = await client();
+  const r = await c.predictions.getOrderHistory({ account: config.gemini.account, ...(symbol ? { symbol } : {}) } as never);
+  const rows = (Array.isArray(r) ? r : ((r as { data?: unknown[] }).data ?? [])) as Record<string, unknown>[];
+  return rows.map((o) => ({ orderId: String(o.orderId), clientOrderId: o.clientOrderId as string | undefined, status: String(o.status), filledQuantity: o.filledQuantity as string | undefined }));
+}
+
+export async function positions(): Promise<unknown[]> {
+  if (config.gemini.dryRun) return [];
+  const c = await client();
+  try {
+    const r = await c.predictions.getPositions({ account: config.gemini.account } as never);
+    return JSON.parse(json(Array.isArray(r) ? r : ((r as { data?: unknown[] }).data ?? [])));
+  } catch (err) {
+    log("warn", `positions unavailable: ${(err as Error).message}`);
+    return [];
+  }
+}

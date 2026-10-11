@@ -1,0 +1,329 @@
+{
+  "GEMI-XRP2610112000-HI1D34": {
+    "bids": [],
+    "asks": [
+      {
+        "price": "0.98",
+        "amount": "5.0",
+        "timestamp": "1791747131"
+      }
+    ]
+  },
+  "GEMI-XRP2610112000-HI1D44": {
+    "bids": [
+      {
+        "price": "0.03",
+        "amount": "4.0",
+        "timestamp": "1791747131"
+      },
+      {
+        "price": "0.02",
+        "amount": "9.0",
+        "timestamp": "1791747131"
+      }
+    ],
+    "asks": []
+  },
+  "GEMI-XRP2610112000-HI1D46": {
+    "bids": [
+      {
+        "price": "0.03",
+        "amount": "5.0",
+        "timestamp": "1791747131"
+      },
+      {
+        "price": "0.02",
+        "amount": "10.0",
+        "timestamp": "1791747131"
+      }
+    ],
+    "asks": []
+  },
+  "GEMI-XRP2610112000-HI1D40": {
+    "bids": [
+      {
+        "price": "0.7",
+        "amount": "7.0",
+        "timestamp": "1791747131"
+      },
+      {
+        "price": "0.69",
+        "amount": "7.0",
+        "timestamp": "1791747131"
+      }
+    ],
+    "asks": [
+      {
+        "price": "0.81",
+        "amount": "7.0",
+        "timestamp": "1791747131"
+      },
+      {
+        "price": "0.82",
+        "amount": "7.0",
+        "timestamp": "1791747131"
+      }
+    ]
+  },
+  "GEMI-XRP2610112000-HI1D36": {
+    "bids": [],
+    "asks": [
+      {
+        "price": "0.98",
+        "amount": "5.0",
+        "timestamp": "1791747131"
+      }
+    ]
+  },
+  "GEMI-XRP2610112000-HI1D48": {
+    "bids": [
+      {
+        "price": "0.03",
+        "amount": "4.0",
+        "timestamp": "1791747131"
+      },
+      {
+        "price": "0.02",
+        "amount": "9.0",
+        "timestamp": "1791747131"
+      }
+    ],
+    "asks": []
+  },
+  "GEMI-XRP2610112000-HI1D38": {
+    "bids": [],
+    "asks": [
+      {
+        "price": "0.98",
+        "amount": "5.0",
+        "timestamp": "1791747131"
+      }
+    ]
+  },
+  "GEMI-XRP2610112000-HI1D42": {
+    "bids": [
+      {
+        "price": "0.02",
+        "amount": "5.0",
+        "timestamp": "1791747131"
+      }
+    ],
+    "asks": []
+  },
+  "GEMI-BTC2610112000-HI83400": {
+    "bids": [
+      {
+        "price": "0.03",
+        "amount": "75.0",
+        "timestamp": "1791747131"
+      },
+      {
+        "price": "0.02",
+        "amount": "75.0",
+        "timestamp": "1791747131"
+      }
+    ],
+    "asks": []
+  },
+  "GEMI-BTC2610112000-HI83700": {
+    "bids": [
+      {
+        "price": "0.03",
+        "amount": "9.0",
+        "timestamp": "1791747131"
+      },
+      {
+        "price": "0.02",
+        "amount": "19.0",
+        "timestamp": "1791747131"
+      }
+    ],
+    "asks": []
+  },
+  "GEMI-BTC2610112000-HI83500": {
+    "bids": [
+      {
+        "price": "0.03",
+        "amount": "65.0",
+        "timestamp": "1791747131"
+      },
+      {
+        "price": "0.02",
+        "amount": "75.0",
+        "timestamp": "1791747131"
+      }
+    ],
+    "asks": []
+  },
+  "GEMI-BTC2610112000-HI83600": {
+    "bids": [
+      {
+        "price": "0.03",
+        "amount": "12.0",
+        "timestamp": "1791747131"
+      },
+      {
+        "price": "0.02",
+        "amount": "22.0",
+        "timestamp": "1791747131"
+      }
+    ],
+    "asks": []
+  },
+  "GEMI-ETH2610112000-HI2500": {
+    "bids": [],
+    "asks": [
+      {
+        "price": "0.98",
+        "amount": "5.0",
+        "timestamp": "1791747132"
+      }
+    ]
+  },
+  "GEMI-BTC2610112000-HI83800": {
+    "bids": [
+      {
+        "price": "0.03",
+        "amount": "13.0",
+        "timestamp": "1791747132"
+      },
+      {
+        "price": "0.02",
+        "amount": "23.0",
+        "timestamp": "1791747132"
+      }
+    ],
+    "asks": []
+  },
+  "GEMI-BTC2610112000-HI83900": {
+    "bids": [
+      {
+        "price": "0.03",
+        "amount": "8.0",
+        "timestamp": "1791747132"
+      },
+      {
+        "price": "0.02",
+        "amount": "18.0",
+        "timestamp": "1791747132"
+      }
+    ],
+    "asks": []
+  },
+  "GEMI-ETH2610112000-HI2480": {
+    "bids": [],
+    "asks": [
+      {
+        "price": "0.98",
+        "amount": "5.0",
+        "timestamp": "1791747132"
+      }
+    ]
+  },
+  "GEMI-ETH2610112000-HI2540": {
+    "bids": [
+      {
+        "price": "0.24",
+        "amount": "4.0",
+        "timestamp": "1791747132"
+      }
+    ],
+    "asks": [
+      {
+        "price": "0.36",
+        "amount": "7.0",
+        "timestamp": "1791747132"
+      },
+      {
+        "price": "0.37",
+        "amount": "7.0",
+        "timestamp": "1791747132"
+      }
+    ]
+  },
+  "GEMI-ETH2610112000-HI2580": {
+    "bids": [
+      {
+        "price": "0.02",
+        "amount": "9.0",
+        "timestamp": "1791747132"
+      }
+    ],
+    "asks": []
+  },
+  "GEMI-BTC2610112000-HI84100": {
+    "bids": [
+      {
+        "price": "0.03",
+        "amount": "14.0",
+        "timestamp": "1791747132"
+      },
+      {
+        "price": "0.02",
+        "amount": "19.0",
+        "timestamp": "1791747132"
+      }
+    ],
+    "asks": []
+  },
+  "GEMI-BTC2610112000-HI84000": {
+    "bids": [
+      {
+        "price": "0.03",
+        "amount": "13.0",
+        "timestamp": "1791747132"
+      },
+      {
+        "price": "0.02",
+        "amount": "18.0",
+        "timestamp": "1791747132"
+      }
+    ],
+    "asks": []
+  },
+  "GEMI-ETH2610112000-HI2460": {
+    "bids": [],
+    "asks": [
+      {
+        "price": "0.98",
+        "amount": "5.0",
+        "timestamp": "1791747132"
+      }
+    ]
+  },
+  "GEMI-ETH2610112000-HI2520": {
+    "bids": [],
+    "asks": [
+      {
+        "price": "0.77",
+        "amount": "7.0",
+        "timestamp": "1791747132"
+      },
+      {
+        "price": "0.79",
+        "amount": "7.0",
+        "timestamp": "1791747132"
+      }
+    ]
+  },
+  "GEMI-ETH2610112000-HI2560": {
+    "bids": [
+      {
+        "price": "0.02",
+        "amount": "4.0",
+        "timestamp": "1791747132"
+      }
+    ],
+    "asks": []
+  },
+  "GEMI-ETH2610112000-HI2600": {
+    "bids": [
+      {
+        "price": "0.02",
+        "amount": "8.0",
+        "timestamp": "1791747132"
+      }
+    ],
+    "asks": []
+  }
+}
