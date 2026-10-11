@@ -23,7 +23,7 @@ export function CouncilChamber({ forecast, live, running }: { forecast: Forecast
         {PERSONAS.map((p, i) => {
           const buf = live[p.key];
           const out = !running ? forecast?.personas[p.key] : undefined;
-          const text = buf != null ? argumentOf(buf) : out?.argument ?? "";
+          const text = out?.argument || (buf != null ? argumentOf(buf) : "");
           const prob = buf != null ? probOf(buf) : out?.probability ?? null;
           const streaming = running && buf != null;
           return (
