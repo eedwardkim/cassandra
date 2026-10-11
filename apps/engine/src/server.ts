@@ -6,7 +6,7 @@ import { CATEGORY_BITS, Policy, type Capabilities } from "@cassandra/shared";
 import { config } from "./config.js";
 import { bus, log } from "./bus.js";
 import { db, schema } from "./db/index.js";
-import { chainLive, chain, deployment, network, blockNumber, explorerTx, agentAccount, ownerAccount } from "./chain/index.js";
+import { chainLive, chain, deployment, network, blockNumber, explorerTx, agentAccount } from "./chain/index.js";
 import * as ops from "./chain/ops.js";
 import { llmLive } from "./council/index.js";
 import { geminiSource } from "./gemini/index.js";
@@ -22,7 +22,7 @@ export async function capabilities(): Promise<Capabilities> {
   return {
     gemini: { mode: geminiSource === "live" ? "live" : "fixture", priceFeed: "rest-orderbook-5s", orders: geminiSource === "live" ? "sandbox" : "dry-run", events: lastDiscovery.events },
     llm: { mode: llmLive ? "live" : "dry-run", model: config.llm.model },
-    chain: { mode: chainLive ? "live" : "dry-run", network, chainId: chain.id, block: latestBlock, ledger: deployment?.ledger ?? null, policy: deployment?.policy ?? null, agent: agentAccount?.address ?? null, owner: ownerAccount?.address ?? null },
+    chain: { mode: chainLive ? "live" : "dry-run", network, chainId: chain.id, block: latestBlock, ledger: deployment?.ledger ?? null, policy: deployment?.policy ?? null, agent: agentAccount?.address ?? null, owner: policyOwnerAddr ?? (chainLive ? (policyOwnerAddr = await ops.policyOwner().catch(() => null)) : null) },
     contextDev: !!config.contextDevKey, demoMode: config.demo,
   };
 }
@@ -40,6 +40,7 @@ function marketSummary(symbol: string) {
   };
 }
 
+let policyOwnerAddr: string | null = null;
 export async function buildServer() {
   const app = Fastify({ logger: false });
   await app.register(cors, { origin: true });
@@ -80,24 +81,33 @@ export async function buildServer() {
     if (!chainLive) return { live: false, policy: null, trades: tradesFor().map(toTrade), categories: CATEGORY_BITS };
     const p = await ops.getPolicy();
     setPolicyMinEdge(p.minEdgeBps);
-    return { live: true, policy: p, agent: agentAccount?.address, owner: ownerAccount?.address, address: deployment?.policy, trades: tradesFor().map(toTrade), categories: CATEGORY_BITS };
+    return { live: true, policy: p, agent: agentAccount?.address, owner: policyOwnerAddr ?? (policyOwnerAddr = await ops.policyOwner()), address: deployment?.policy, trades: tradesFor().map(toTrade), categories: CATEGORY_BITS };
   });
-  app.post("/api/policy", async (req, reply) => {
-    if (!chainLive) return reply.code(503).send({ error: "chain is in dry-run mode" });
-    const p = Policy.parse(req.body);
-    const sent = await ops.setPolicy(p);
-    setPolicyMinEdge(p.minEdgeBps);
-    bus.emit({ type: "policy.updated", policy: p, txHash: sent.hash });
-    return { txHash: sent.hash, block: sent.block, explorer: explorerTx(sent.hash) };
+  // Policy writes are signed by the owner's own wallet in the browser; the engine holds no key that can call setPolicy/setPaused.
+  // Local anvil only: a JSON-RPC passthrough so a browser wallet can reach the chain, and a one-shot gas faucet.
+  const RPC_DENY = /^(eth_sendTransaction|eth_sign|eth_signTransaction|eth_signTypedData.*|eth_accounts|eth_requestAccounts|eth_coinbase)$/;
+  const rpcAllowed = (m: unknown) => typeof m === "string" && (/^eth_/.test(m) || m === "net_version" || m === "web3_clientVersion") && !RPC_DENY.test(m);
+  app.post("/rpc", async (req, reply) => {
+    if (network !== "local") return reply.code(404).send({ error: "rpc passthrough exists only on the local chain" });
+    const body = req.body as { method?: unknown; id?: unknown } | { method?: unknown; id?: unknown }[];
+    const calls = Array.isArray(body) ? body : [body];
+    const bad = calls.find((c) => !rpcAllowed(c?.method));
+    if (bad) return reply.code(403).send({ jsonrpc: "2.0", id: bad?.id ?? null, error: { code: -32601, message: `method not allowed: ${String(bad?.method)}` } });
+    const r = await fetch(config.chain.localRpcUrl, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    return reply.code(r.status).header("content-type", "application/json").send(await r.text());
   });
-  app.post("/api/agent/pause", async (req, reply) => {
-    if (!chainLive) return reply.code(503).send({ error: "chain is in dry-run mode" });
-    const { paused } = z.object({ paused: z.boolean() }).parse(req.body ?? {});
-    const cur = await ops.getPolicy();
-    const p = { maxNotionalPerTrade: cur.maxNotionalPerTrade, maxDailyNotional: cur.maxDailyNotional, minEdgeBps: cur.minEdgeBps, allowedCategoryMask: cur.allowedCategoryMask, paused };
-    const sent = await ops.setPolicy(p);
-    bus.emit({ type: "policy.updated", policy: p, txHash: sent.hash });
-    return { txHash: sent.hash, paused };
+  const fauceted = new Set<string>();
+  app.post("/api/faucet-local", async (req, reply) => {
+    if (network !== "local") return reply.code(404).send({ error: "faucet exists only on the local chain" });
+    const { address } = z.object({ address: z.string().regex(/^0x[0-9a-fA-F]{40}$/) }).parse(req.body ?? {});
+    const key = address.toLowerCase();
+    if (fauceted.has(key)) return reply.code(429).send({ error: "this address was already funded" });
+    fauceted.add(key);
+    const r = await fetch(config.chain.localRpcUrl, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "anvil_setBalance", params: [address, "0xde0b6b3a7640000"] }) });
+    const j = (await r.json()) as { error?: { message: string } };
+    if (j.error) { fauceted.delete(key); return reply.code(502).send({ error: j.error.message }); }
+    log("info", `local faucet: 1 test ETH to ${address}`);
+    return { funded: address, amountWei: "1000000000000000000" };
   });
   app.post("/api/track", async (req) => {
     const { eventTicker } = z.object({ eventTicker: z.string().min(1) }).parse(req.body);

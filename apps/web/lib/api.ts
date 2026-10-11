@@ -20,6 +20,7 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   return body as T;
 }
 
+export const offline = (err: string) => (process.env.NODE_ENV === "development" ? `Engine offline (${err}). Start it with pnpm dev.` : "Engine offline");
 export const pct = (bps: number | null | undefined, d = 1) => (bps == null ? "—" : `${(bps / 100).toFixed(d)}%`);
 export const short = (h?: string | null) => (h ? `${h.slice(0, 6)}…${h.slice(-4)}` : "—");
 export const usd = (cents: number | null | undefined) => (cents == null ? "—" : `$${(cents / 100).toFixed(2)}`);

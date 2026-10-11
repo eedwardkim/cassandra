@@ -23,21 +23,21 @@ export function PriceChart({ ticks, forecast, bias }: { ticks: Tick[]; forecast:
     <div ref={ref} className="w-full">
       {ticks.length === 0 ? <div className="skeleton h-[260px] rounded" /> : (
         <svg width={w} height={h} className="overflow-visible">
-          {[0, 25, 50, 75, 100].map((v) => (<g key={v}><line x1={m.l} x2={w - m.r} y1={y(v)} y2={y(v)} stroke="rgba(255,255,255,0.05)" /><text x={w - m.r + 6} y={y(v) + 3} fontSize="10" fill="#8B8F9A" className="num">{v}%</text></g>))}
-          {x.ticks(4).map((t) => <text key={+t} x={x(t)} y={h - 10} fontSize="10" fill="#8B8F9A" textAnchor="middle" className="num">{d3.timeFormat("%H:%M")(t)}</text>)}
-          <path d={area} fill="rgba(93,214,242,0.08)" />
-          <path d={line} fill="none" stroke="#5DD6F2" strokeWidth="1.5" />
+          {[0, 25, 50, 75, 100].map((v) => (<g key={v}><line x1={m.l} x2={w - m.r} y1={y(v)} y2={y(v)} stroke="rgba(16,24,40,0.1)" /><text x={w - m.r + 6} y={y(v) + 3} fontSize="10" fill="#667085" className="num">{v}%</text></g>))}
+          {x.ticks(4).map((t) => <text key={+t} x={x(t)} y={h - 10} fontSize="10" fill="#667085" textAnchor="middle" className="num">{d3.timeFormat("%H:%M")(t)}</text>)}
+          <path d={area} fill="rgba(59,91,219,0.08)" />
+          <path d={line} fill="none" stroke="#3B5BDB" strokeWidth="1.5" />
           {forecast && (() => {
             const fx = Math.min(x(forecast.createdAt), w - m.r - 4);
             return (<g>
-              <rect x={fx - 5} width={10} y={y(forecast.hiBps / 100)} height={Math.max(2, y(forecast.loBps / 100) - y(forecast.hiBps / 100))} fill="rgba(245,176,65,0.18)" rx="2" />
-              <circle cx={fx} cy={y(forecast.pBps / 100)} r="4.5" fill="#F5B041" />
-              <text x={fx - 8} y={y(forecast.pBps / 100) + 4} textAnchor="end" fontSize="11" fill="#F5B041" className="num">{(forecast.pBps / 100).toFixed(0)}%</text>
+              <rect x={fx - 5} width={10} y={y(forecast.hiBps / 100)} height={Math.max(2, y(forecast.loBps / 100) - y(forecast.hiBps / 100))} fill="rgba(229,83,10,0.18)" rx="2" />
+              <circle cx={fx} cy={y(forecast.pBps / 100)} r="4.5" fill="#E5530A" />
+              <text x={fx - 8} y={y(forecast.pBps / 100) + 4} textAnchor="end" fontSize="11" fill="#E5530A" className="num">{(forecast.pBps / 100).toFixed(0)}%</text>
             </g>);
           })()}
           {flags.map((s, i) => {
             const fx = w - m.r - 6 - i * 16;
-            return (<g key={s.kind}><line x1={fx} x2={fx} y1={h - m.b} y2={h - m.b - 16} stroke="#F5B041" strokeOpacity="0.6" /><path d={`M${fx} ${h - m.b - 16} l7 3 l-7 3 z`} fill="#F5B041" fillOpacity={0.4 + s.score * 0.6}><title>{BIAS_NAMES[s.kind]}: {s.explanation}</title></path></g>);
+            return (<g key={s.kind}><line x1={fx} x2={fx} y1={h - m.b} y2={h - m.b - 16} stroke="#E5530A" strokeOpacity="0.6" /><path d={`M${fx} ${h - m.b - 16} l7 3 l-7 3 z`} fill="#E5530A" fillOpacity={0.4 + s.score * 0.6}><title>{BIAS_NAMES[s.kind]}: {s.explanation}</title></path></g>);
           })}
         </svg>
       )}

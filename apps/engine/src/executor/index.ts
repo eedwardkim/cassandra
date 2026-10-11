@@ -1,4 +1,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
+import * as V from "viem";
+import { agentPolicyAbi } from "@cassandra/shared";
+import * as gateway from "../gateway.js";
 import { and, eq } from "drizzle-orm";
 import type { Hex } from "viem";
 import { commitmentHash, marketKey, orderIdHash, type Forecast, type BiasReport } from "@cassandra/shared";
@@ -106,7 +109,7 @@ export async function seal(f: Forecast, source: "live" | "replay" = "live") {
   }
 }
 
-/** Policy check on-chain, IOC order in the sandbox, then recordTrade on-chain. */
+/** authorizeTrade on-chain → gateway places the IOC order → settleTrade on-chain. */
 export async function tradeGap(f: Forecast, report: BiasReport) {
   const already = db.select().from(trades).where(and(eq(trades.forecastId, f.id), eq(trades.network, network))).all();
   if (already.some((t) => t.state !== "refused")) return toTrade(already[0]!);
@@ -123,34 +126,36 @@ export async function tradeGap(f: Forecast, report: BiasReport) {
   const notionalCents = Math.round((quantity * priceBps) / 100);
   const edge = report.edgeBps;
   const category = categoryBit(c.category);
-  const check = await ops.checkPolicy(notionalCents, edge, category);
-  bus.emit({ type: "policy.checked", symbol: f.symbol, ok: check.ok, reason: check.reason, edgeBps: edge, notionalCents });
   const now = Date.now();
   const base = { symbol: f.symbol, forecastId: f.id, outcome, side: "buy", priceBps, quantity, notionalCents, edgeBps: edge, category, clientOrderId: randomUUID(), network, source: gemini.geminiSource, createdAt: now, updatedAt: now };
-  if (!check.ok) {
-    const row = db.insert(trades).values({ ...base, state: "refused", reason: check.reason }).returning().get();
-    bus.emit({ type: "trade.refused", trade: toTrade(row) });
-    log("warn", `trade refused on-chain for ${f.symbol}: ${check.reason}`);
-    return toTrade(row);
+  const row = db.insert(trades).values({ ...base, state: "authorizing" }).returning().get();
+  const set = (v: Partial<typeof trades.$inferInsert>) => db.update(trades).set({ ...v, updatedAt: Date.now() }).where(eq(trades.id, row.id)).returning().get();
+  // 1. the chain approves first; a revert means no order is ever sent
+  const auth = await ops.authorizeTrade(marketKey(f.symbol), notionalCents, edge, category, V.keccak256(V.toBytes(base.clientOrderId)), String(row.id));
+  bus.emit({ type: "policy.checked", symbol: f.symbol, ok: auth.ok, reason: auth.ok ? "ok" : auth.reason, edgeBps: edge, notionalCents });
+  if (!auth.ok) {
+    const r = set({ state: "refused", reason: auth.reason });
+    bus.emit({ type: "trade.refused", trade: toTrade(r) });
+    log("warn", `chain refused ${f.symbol}: ${auth.reason}. No order sent.`);
+    return toTrade(r);
   }
-  // store the attempt before the POST; a crash after this point is reconciled from order history, never resent
-  const row = db.insert(trades).values({ ...base, state: "placing" }).returning().get();
-  let placed: gemini.PlacedOrder;
-  try {
-    placed = await gemini.placeIoc({ symbol: f.symbol, outcome, priceBps, quantity, clientOrderId: base.clientOrderId });
-  } catch (err) {
-    const failed = db.update(trades).set({ state: "failed", reason: (err as Error).message.slice(0, 300), updatedAt: Date.now() }).where(eq(trades.id, row.id)).returning().get();
-    bus.emit({ type: "trade.refused", trade: toTrade(failed) });
-    throw err;
+  const ev = auth.receipt.logs.map((l) => { try { return V.decodeEventLog({ abi: agentPolicyAbi, ...l }); } catch { return null; } }).find((e) => e?.eventName === "TradeAuthorized");
+  const tradeId = ev && ev.eventName === "TradeAuthorized" ? Number(ev.args.tradeId) : null;
+  if (tradeId == null) throw new Error("TradeAuthorized missing from receipt");
+  bus.emit({ type: "trade.authorized", trade: toTrade(set({ state: "authorized", authorizeTx: auth.hash })) });
+  // 2. the gateway re-reads the authorization from the chain and sends the order
+  let placed: Awaited<ReturnType<typeof gateway.placeAuthorized>> = null;
+  let failure: string | null = null;
+  try { placed = await gateway.placeAuthorized(auth.hash); } catch (err) { failure = (err as Error).message.slice(0, 300); }
+  if (placed) {
+    bus.emit({ type: "trade.placed", trade: toTrade(set({ state: "placed", orderId: placed.orderId, orderStatus: placed.status, filledQuantity: placed.filledQuantity })) });
+    log("info", `sandbox order ${placed.orderId} ${outcome} ${quantity} @ ${pct(priceBps)} → ${placed.status}`);
   }
-  const p2 = db.update(trades).set({ state: "placed", orderId: placed.orderId, orderStatus: placed.status, filledQuantity: placed.filledQuantity, updatedAt: Date.now() }).where(eq(trades.id, row.id)).returning().get();
-  bus.emit({ type: "trade.placed", trade: toTrade(p2) });
-  log("info", `sandbox order ${placed.orderId} ${outcome} ${quantity} @ ${pct(priceBps)} → ${placed.status}`);
-  const rec = await ops.recordTrade(marketKey(f.symbol), notionalCents, Math.max(0, edge), category, orderIdHash(placed.orderId), String(row.id));
-  const done = rec.ok
-    ? db.update(trades).set({ state: "recorded", recordTx: rec.hash, recordBlock: rec.block, updatedAt: Date.now() }).where(eq(trades.id, row.id)).returning().get()
-    : db.update(trades).set({ state: "refused", reason: rec.reason, updatedAt: Date.now() }).where(eq(trades.id, row.id)).returning().get();
-  bus.emit({ type: rec.ok ? "trade.recorded" : "trade.refused", trade: toTrade(done) });
+  // 3. settle: unfilled notional returns to the day's budget
+  const filledCents = placed ? Math.min(notionalCents, Math.floor((Number(placed.filledQuantity || 0) * priceBps) / 100)) : 0;
+  const st = await ops.settleTrade(tradeId, placed ? orderIdHash(placed.orderId) : V.zeroHash, filledCents, String(row.id));
+  const done = set({ state: placed ? "settled" : "failed", reason: failure, recordTx: st.hash, recordBlock: st.block });
+  bus.emit({ type: placed ? "trade.settled" : "trade.refused", trade: toTrade(done) });
   return toTrade(done);
 }
 

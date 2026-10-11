@@ -15,7 +15,8 @@
     "geist": "^1.7.2",
     "next": "16.4.0",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "viem": "^2.57.4"
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "^4",

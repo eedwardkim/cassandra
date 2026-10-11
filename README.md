@@ -11,11 +11,8 @@ price, and a policy-bound agent wallet trades the gap in the Gemini prediction-m
 
 ![20-second demo](docs/demo.gif)
 
-> **Chain status: local anvil, not BSC Testnet yet.** Every commit, reveal, policy check, `TradeRecorded` and
-> `Scored` is a real transaction, but on an anvil chain (id 31337) running beside the engine, because no free faucet
-> would drip tBNB to a fresh wallet (see [docs/CUTS.md](docs/CUTS.md)). The UI badges every chain value "local chain".
-> `pnpm deploy:testnet` moves it to BSC Testnet (chain 97) in one command once the owner wallet
-> `0x96B259daae8666f7CD4848fB6B3DB9BD4f044a6c` holds ≥ 0.005 tBNB.
+> **Chain status: local anvil (chain 31337), not BSC Testnet.** Every transaction below is real but local, because no
+> free faucet would fund a fresh wallet ([docs/CUTS.md](docs/CUTS.md)). `pnpm deploy:testnet` moves it to chain 97.
 
 ## What it does
 
@@ -25,8 +22,10 @@ price, and a policy-bound agent wallet trades the gap in the Gemini prediction-m
    pools them in logit space. The whole debate is hashed into the on-chain commitment.
 3. **Proves calibration.** Commit, reveal, then a Brier score on resolution. Anyone can check she was right before it
    was obvious.
-4. **Stays on a leash.** The owner sets spend limits in `AgentPolicy`; the agent cannot record a trade outside them,
-   and each trade is logged beside its Gemini order id.
+4. **Stays on a leash.** The agent cannot place a trade outside these limits. Every order needs an on-chain approval
+   first; the contract reverts out-of-policy trades before anything reaches Gemini. The owner's browser wallet signs
+   the limits on `/policy`. The Gemini sandbox key lives only in the order gateway; exchange-side enforcement (Gemini
+   checking the policy contract itself) is next.
 
 ## Architecture
 
@@ -39,7 +38,7 @@ flowchart LR
   B --> E[Executor]
   C --> E
   E -->|commit · reveal| L[CalibrationLedger.sol\nBSC Testnet]
-  E -->|check · recordTrade| P[AgentPolicy.sol\nBSC Testnet]
+  E -->|authorizeTrade · settleTrade| P[AgentPolicy.sol\nBSC Testnet]
   E -->|placeOrder| G
   E --> S[SSE /api/stream]
   S --> W[Next.js UI]
@@ -54,17 +53,10 @@ Details in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 **Recompute a commitment.** `GET /api/markets/:symbol` returns each commit's `marketKey`, `pBps`, `reasoningHash` and
 `salt` once revealed. `GET /api/forecasts/:id` returns the personas and Judge JSON.
 
-```ts
-import { keccak256, toBytes, encodeAbiParameters } from "viem";
-const f = await (await fetch(`${ENGINE}/api/forecasts/${id}`)).json();
-keccak256(toBytes(canonicalJson({ personas: f.personas, judge: f.judge })));   // === reasoningHash
-keccak256(encodeAbiParameters(
-  [{ type: "bytes32" }, { type: "uint16" }, { type: "bytes32" }, { type: "bytes32" }],
-  [keccak256(toBytes(symbol)), pBps, reasoningHash, salt]));                     // === on-chain commitment
-```
+`keccak256(canonicalJson({ personas, judge }))` must equal `reasoningHash`, and
+`keccak256(abi.encode(keccak256(symbol), pBps, reasoningHash, salt))` must equal the on-chain commitment.
 
-`canonicalJson` (sorted keys, no whitespace) is in `packages/shared/src/hash.ts`. The Ledger's **verify** button runs
-exactly this in the browser.
+Both are in `packages/shared/src/hash.ts`; the Ledger's **verify** button runs them in the browser.
 
 **Recompute a bias score.** `GET /api/markets/:symbol` returns the raw ticks and the latest report. Every signature
 carries its `evidence`. Overround on a binary contract: `sum = yesAsk + noAsk`, `score = clamp((sum − 1.02) / 0.10)`.
@@ -84,7 +76,7 @@ cp .env.example .env           # Gemini sandbox keys, ANTHROPIC_API_KEY, OWNER/A
 anvil &                        # only for CHAIN_NETWORK=local
 pnpm deploy:local              # or: pnpm deploy:testnet (needs tBNB on the owner wallet)
 pnpm dev                       # web :3000, engine :4000
-pnpm smoke                     # capability table, discovery, bias, council, seal, policy, order
+pnpm smoke --open-leash        # discovery, bias, council, seal, leash refusal, authorize → order → settle
 pnpm demo:replay               # score settled sandbox markets on-chain for the Ledger
 ```
 
@@ -98,11 +90,21 @@ Deploy: `fly deploy` (engine + anvil, state on a volume; see `fly.toml`) and `ve
 | CalibrationLedger | `0x0b339ee0a3dcda7ebc1c07d15da966f586dbad54` | pending tBNB |
 | AgentPolicy | `0x0b23d823f330f459523b9b2beca21dc8e21a93f3` | pending tBNB |
 | Agent | `0xB87A941e1316f03Bb0802463Dd7eC26FDf85177B` | same |
-| Owner / resolver | `0x96B259daae8666f7CD4848fB6B3DB9BD4f044a6c` | same |
+| Policy owner (human wallet) | `0x96B259daae8666f7CD4848fB6B3DB9BD4f044a6c` | same |
+| Ledger resolver (server key) | same address in this demo (`RESOLVER_PRIVATE_KEY` falls back to `OWNER_PRIVATE_KEY`) | same |
 
-Real Gemini sandbox order: `145853902277221008` (visible in the sandbox order history).
+Real Gemini sandbox orders: `145853902277229792` (buy YES, filled) and `145853902277229793` (buy NO, filled) through
+`placeIoc` at ask + 1 tick; `145853902277221008` placed by the executor (IOC, cancelled unfilled, stale quote).
+
+Leash proof (`pnpm smoke --open-leash`, local chain): max per trade $0.00 → refused, Gemini order count unchanged.
+Inside the limits: `authorizeTrade`
+`0x0cc6c237247946ed986a6f197e71c20489af76df2c3de969f042dfa494976674` → sandbox order `145853902277242812` (filled
+10 YES @ 53¢) → `settleTrade` `0xa62a7bbc7741f6120df3b2e47e17dd0332925613b50c89d987e5c6b50af05494`.
 
 ## What we build next
+
+- **Per-user Gemini accounts.** The demo trades through one shared Gemini sandbox account; each owner should bring
+  their own exchange account, with Gemini checking the policy contract before it fills.
 
 - **Gemini settlement attestations as the resolver.** Today the owner wallet resolves; production reads signed
   settlement from the exchange so nobody grades their own forecaster.

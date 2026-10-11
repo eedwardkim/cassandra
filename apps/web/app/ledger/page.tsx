@@ -4,7 +4,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import * as d3 from "d3";
 import { commitmentHash } from "@cassandra/shared/hash";
-import { api, pct, type Ledger, type LedgerRow } from "@/lib/api";
+import { api, pct, type Ledger, type LedgerRow, offline } from "@/lib/api";
 import { useEvents, useStream } from "@/components/stream";
 import { Badge, Hash, Num, Panel, page } from "@/components/ui";
 
@@ -46,10 +46,10 @@ export default function LedgerPage() {
             <thead><tr className="text-left">{["Time", "Market", "p", "Outcome", "Brier", "Commit", "Reveal", "Score", ""].map((h) => <th key={h} className="label px-4 py-2 font-normal">{h}</th>)}</tr></thead>
             <tbody className="divide-y divide-hairline">
               {!l && !err && Array.from({ length: 4 }).map((_, i) => <tr key={i}><td colSpan={9} className="px-4 py-2"><div className="skeleton h-5 rounded" /></td></tr>)}
-              {err && <tr><td colSpan={9} className="px-4 py-6 text-center text-muted">Engine unreachable ({err})</td></tr>}
+              {err && <tr><td colSpan={9} className="px-4 py-6 text-center text-muted">{offline(err)}</td></tr>}
               {l && l.commits.length === 0 && <tr><td colSpan={9} className="px-4 py-6 text-center text-muted">No sealed forecasts yet. Run the council on any market.</td></tr>}
               {l?.commits.map((c, i) => (
-                <motion.tr key={c.id} initial={{ opacity: 0 }} animate={{ opacity: 1, transition: { delay: Math.min(i, 20) * 0.04 } }} className="hover:bg-white/[0.02]">
+                <motion.tr key={c.id} initial={{ opacity: 0 }} animate={{ opacity: 1, transition: { delay: Math.min(i, 20) * 0.04 } }} className="hover:bg-black/[0.04]">
                   <td className="num px-4 py-2 text-xs text-muted">{new Date(c.createdAt).toISOString().slice(5, 16).replace("T", " ")}</td>
                   <td className="max-w-[260px] px-4 py-2"><Link href={`/m/${c.symbol}`} className="block truncate hover:text-oracle">{c.title}</Link><span className="text-xs text-muted">{c.label}</span> {c.replay && <Badge kind="replay">replay</Badge>}</td>
                   <td className="num px-4 py-2 text-oracle">{pct(c.pBps)}</td>
@@ -105,10 +105,10 @@ function Reliability({ rows }: { rows: LedgerRow[] }) {
   if (!rows.length) return <div className="grid h-[200px] place-items-center text-xs text-muted">Fills in as markets resolve</div>;
   return (
     <svg viewBox={`0 0 ${w} ${h}`} className="w-full">
-      <line x1={x(0)} y1={y(0)} x2={x(1)} y2={y(1)} stroke="rgba(255,255,255,0.15)" strokeDasharray="3 3" />
-      {[0, 0.5, 1].map((v) => <g key={v}><text x={x(v)} y={h - 8} fontSize="9" fill="#8B8F9A" textAnchor="middle">{v * 100}%</text><text x={4} y={y(v) + 3} fontSize="9" fill="#8B8F9A">{v * 100}</text></g>)}
-      {bins.map((b) => b.obs != null && <circle key={b.i} cx={x((b.i + 0.5) / 10)} cy={y(b.obs)} r={3 + Math.sqrt(b.n) * 2} fill="rgba(245,176,65,0.35)" stroke="#F5B041" />)}
-      <text x={w - 8} y={h - m - 4} fontSize="9" fill="#8B8F9A" textAnchor="end">predicted</text>
+      <line x1={x(0)} y1={y(0)} x2={x(1)} y2={y(1)} stroke="rgba(16,24,40,0.1)" strokeDasharray="3 3" />
+      {[0, 0.5, 1].map((v) => <g key={v}><text x={x(v)} y={h - 8} fontSize="9" fill="#667085" textAnchor="middle">{v * 100}%</text><text x={4} y={y(v) + 3} fontSize="9" fill="#667085">{v * 100}</text></g>)}
+      {bins.map((b) => b.obs != null && <circle key={b.i} cx={x((b.i + 0.5) / 10)} cy={y(b.obs)} r={3 + Math.sqrt(b.n) * 2} fill="rgba(229,83,10,0.35)" stroke="#E5530A" />)}
+      <text x={w - 8} y={h - m - 4} fontSize="9" fill="#667085" textAnchor="end">predicted</text>
     </svg>
   );
 }

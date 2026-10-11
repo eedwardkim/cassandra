@@ -29,14 +29,15 @@ const transport = network === "local"
   : fallback([http(config.chain.rpcUrl, { retryCount: 2 }), http(config.chain.rpcFallback, { retryCount: 2 })]);
 
 export const publicClient: PublicClient = createPublicClient({ chain, transport, pollingInterval: network === "local" ? 500 : 1500 });
-export const ownerAccount: Account | null = config.chain.ownerKey ? privateKeyToAccount(config.chain.ownerKey) : null;
+/** Resolves markets on CalibrationLedger. It is NOT the AgentPolicy owner unless the deploy chose so; policy writes are signed by the human's wallet in the browser. */
+export const resolverAccount: Account | null = config.chain.resolverKey ? privateKeyToAccount(config.chain.resolverKey) : null;
 export const agentAccount: Account | null = config.chain.agentKey ? privateKeyToAccount(config.chain.agentKey) : null;
 const wallet = (a: Account | null): WalletClient | null => (a ? createWalletClient({ account: a, chain, transport }) : null);
-export const ownerWallet = wallet(ownerAccount);
+export const resolverWallet = wallet(resolverAccount);
 export const agentWallet = wallet(agentAccount);
 
 export const deployment = loadDeployment();
-export const chainLive = !config.chain.dryRun && !!deployment && !!ownerWallet && !!agentWallet;
+export const chainLive = !config.chain.dryRun && !!deployment && !!resolverWallet && !!agentWallet;
 
 /** Pull the revert reason string out of a viem error (e.g. PolicyViolation("daily notional limit reached")). */
 export function revertReason(err: unknown): string {
@@ -60,5 +61,5 @@ export async function blockNumber(): Promise<number | null> {
 
 export async function balances(): Promise<{ owner: string | null; agent: string | null }> {
   const f = async (a: Account | null) => (a ? (Number(await publicClient.getBalance({ address: a.address })) / 1e18).toFixed(4) : null);
-  try { return { owner: await f(ownerAccount), agent: await f(agentAccount) }; } catch { return { owner: null, agent: null }; }
+  try { return { owner: await f(resolverAccount), agent: await f(agentAccount) }; } catch { return { owner: null, agent: null }; }
 }

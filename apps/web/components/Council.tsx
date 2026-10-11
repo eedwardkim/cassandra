@@ -34,7 +34,7 @@ export function CouncilChamber({ forecast, live, running }: { forecast: Forecast
                 <div className="num text-lg text-oracle">{prob != null ? `${(prob * 100).toFixed(0)}%` : "—"}</div>
               </header>
               <p className={`mt-2 min-h-[5.5rem] text-[0.8rem] leading-relaxed text-ink/85 ${streaming ? "caret" : ""}`}>
-                {text || <span className="text-muted">{running ? "thinking…" : "Run the council to hear this persona."}</span>}
+                {text || <span className="text-muted">{running ? "thinking…" : "Not run yet."}</span>}
               </p>
               {out?.cruxes?.length ? <ul className="mt-2 space-y-0.5 text-[0.7rem] text-muted">{out.cruxes.map((c) => <li key={c}>— {c}</li>)}</ul> : null}
             </motion.article>
@@ -66,7 +66,7 @@ function Judge({ forecast, running }: { forecast: Forecast | null; running: bool
           </motion.div>
         ) : (
           <motion.div key="wait" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, rotateX: 90 }} className="hair grid h-28 place-items-center rounded-lg bg-surface/50 text-sm text-muted">
-            {running ? "The Judge is weighing four arguments in logit space" : "No forecast yet for this contract"}
+            {running ? "Trimmed mean of 4 forecasts, log-odds" : "No forecast yet for this contract"}
           </motion.div>
         )}
       </AnimatePresence>
@@ -80,11 +80,11 @@ function Dial({ p, lo, hi, market }: { p: number; lo: number; hi: number; market
   const m = pos(market);
   return (
     <svg width="96" height="96" viewBox="0 0 96 96" aria-label={`Judge ${(p * 100).toFixed(0)}%`}>
-      <circle cx="48" cy="48" r={r} stroke="rgba(255,255,255,0.08)" strokeWidth="6" fill="none" />
-      <circle cx="48" cy="48" r={r} stroke="rgba(245,176,65,0.25)" strokeWidth="6" fill="none" strokeDasharray={`${(hi - lo) * c} ${c}`} transform={`rotate(${lo * 360 - 90} 48 48)`} />
-      <motion.circle cx="48" cy="48" r={r} stroke="#F5B041" strokeWidth="2.5" fill="none" strokeLinecap="round" initial={{ strokeDasharray: `0 ${c}` }} animate={{ strokeDasharray: `${p * c} ${c}` }} transition={{ duration: 0.9, ease: "easeOut" }} transform="rotate(-90 48 48)" />
-      <circle cx={m.x} cy={m.y} r="3.5" fill="#5DD6F2" />
-      <text x="48" y="53" textAnchor="middle" className="num" fill="#E8E6E1" fontSize="17">{(p * 100).toFixed(0)}%</text>
+      <circle cx="48" cy="48" r={r} stroke="rgba(16,24,40,0.1)" strokeWidth="6" fill="none" />
+      <circle cx="48" cy="48" r={r} stroke="rgba(229,83,10,0.25)" strokeWidth="6" fill="none" strokeDasharray={`${(hi - lo) * c} ${c}`} transform={`rotate(${lo * 360 - 90} 48 48)`} />
+      <motion.circle cx="48" cy="48" r={r} stroke="#E5530A" strokeWidth="2.5" fill="none" strokeLinecap="round" initial={{ strokeDasharray: `0 ${c}` }} animate={{ strokeDasharray: `${p * c} ${c}` }} transition={{ duration: 0.9, ease: "easeOut" }} transform="rotate(-90 48 48)" />
+      <circle cx={m.x} cy={m.y} r="3.5" fill="#3B5BDB" />
+      <text x="48" y="53" textAnchor="middle" className="num" fill="#0E1116" fontSize="17">{(p * 100).toFixed(0)}%</text>
     </svg>
   );
 }

@@ -162,7 +162,9 @@ export const Trade = z.object({
   orderStatus: z.string().nullable(),
   filledQuantity: z.string().nullable(),
   recordTx: z.string().nullable(),
-  state: z.enum(["checking", "refused", "placing", "placed", "recorded", "failed"]),
+  authorizeTx: z.string().nullable(),
+  onchainTradeId: z.number().int().nullable(),
+  state: z.enum(["checking", "authorizing", "authorized", "refused", "placing", "placed", "settled", "recorded", "failed"]),
   error: z.string().nullable(),
   source: Source,
 });
@@ -201,7 +203,8 @@ export type StreamEvent =
   | { type: "policy.checked"; symbol: string; ok: boolean; reason: string; edgeBps: number; notionalCents: number }
   | { type: "trade.refused"; trade: Trade }
   | { type: "trade.placed"; trade: Trade }
-  | { type: "trade.recorded"; trade: Trade }
+  | { type: "trade.authorized"; trade: Trade }
+  | { type: "trade.settled"; trade: Trade }
   | { type: "policy.updated"; policy: Policy; txHash: string }
   | { type: "index.update"; value: number; ts: number }
   | { type: "block"; number: number }

@@ -11,15 +11,34 @@ contract AgentPolicy {
         bool paused;
     }
 
+    enum TradeState { None, Authorized, Settled }
+
+    struct Trade {
+        address agent;
+        bytes32 marketKey;
+        uint128 notional;
+        uint16 edgeBps;
+        uint32 day;
+        bytes32 clientOrderIdHash;
+        TradeState state;
+    }
+
     address public owner;
+    Trade[] public trades;
     mapping(address => Policy) public policies;
     mapping(address => mapping(uint32 => uint256)) public spentByDay;
 
     event PolicySet(address agent, uint128 maxNotionalPerTrade, uint128 maxDailyNotional, uint16 minEdgeBps, uint32 allowedCategoryMask, bool paused);
+    event OwnershipTransferred(address previousOwner, address newOwner);
+    event TradeAuthorized(uint256 tradeId, address agent, bytes32 marketKey, uint256 notional, uint16 edgeBps, bytes32 clientOrderIdHash, uint32 dayBucket);
     event TradeRecorded(address agent, bytes32 marketKey, uint256 notional, uint16 edgeBps, bytes32 orderIdHash, uint32 dayBucket);
 
     error NotOwner();
     error PolicyViolation(string reason);
+    error NotAgent();
+    error BadState();
+    error OverFilled();
+    error UnknownTrade();
 
     modifier onlyOwner() {
         if (msg.sender != owner) revert NotOwner();
@@ -54,11 +73,41 @@ contract AgentPolicy {
         return (true, "ok");
     }
 
-    function recordTrade(bytes32 marketKey, uint256 notional, uint16 edgeBps, uint8 category, bytes32 orderIdHash) external {
+    /// Reserve budget before any order exists. Reverts PolicyViolation(reason) if out of policy.
+    function authorizeTrade(bytes32 marketKey, uint256 notional, uint16 edgeBps, uint8 category, bytes32 clientOrderIdHash) external returns (uint256 tradeId) {
         (bool ok, string memory reason) = check(msg.sender, notional, edgeBps, category);
         if (!ok) revert PolicyViolation(reason);
         uint32 day = dayBucket();
         spentByDay[msg.sender][day] += notional;
-        emit TradeRecorded(msg.sender, marketKey, notional, edgeBps, orderIdHash, day);
+        tradeId = trades.length;
+        trades.push(Trade(msg.sender, marketKey, uint128(notional), edgeBps, day, clientOrderIdHash, TradeState.Authorized));
+        emit TradeAuthorized(tradeId, msg.sender, marketKey, notional, edgeBps, clientOrderIdHash, day);
+    }
+
+    /// Close an authorization with the exchange order id; unfilled notional goes back to that day's budget.
+    function settleTrade(uint256 tradeId, bytes32 orderIdHash, uint256 filledNotional) external {
+        if (tradeId >= trades.length) revert UnknownTrade();
+        Trade storage t = trades[tradeId];
+        if (t.agent != msg.sender) revert NotAgent();
+        if (t.state != TradeState.Authorized) revert BadState();
+        if (filledNotional > t.notional) revert OverFilled();
+        spentByDay[msg.sender][t.day] -= t.notional - filledNotional;
+        t.state = TradeState.Settled;
+        emit TradeRecorded(msg.sender, t.marketKey, filledNotional, t.edgeBps, orderIdHash, t.day);
+    }
+
+    function transferOwnership(address newOwner) external onlyOwner {
+        emit OwnershipTransferred(owner, newOwner);
+        owner = newOwner;
+    }
+
+    function setPaused(address agent, bool paused) external onlyOwner {
+        Policy storage p = policies[agent];
+        p.paused = paused;
+        emit PolicySet(agent, p.maxNotionalPerTrade, p.maxDailyNotional, p.minEdgeBps, p.allowedCategoryMask, paused);
+    }
+
+    function tradeCount() external view returns (uint256) {
+        return trades.length;
     }
 }

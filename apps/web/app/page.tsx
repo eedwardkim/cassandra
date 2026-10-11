@@ -1,97 +1,115 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { api, pct, BIAS_NAMES, type MarketSummary } from "@/lib/api";
-import { Field } from "@/components/Field";
-import { Gauge } from "@/components/Gauge";
+import { api, pct, BIAS_NAMES, type Ledger, type MarketSummary, offline } from "@/lib/api";
 import { Ticker } from "@/components/Ticker";
 import { useEvents, useStream } from "@/components/stream";
-import { Badge, page } from "@/components/ui";
+import { Badge, Num } from "@/components/ui";
+
+const closesIn = (iso: string | null) => {
+  if (!iso) return null;
+  const m = Math.round((Date.parse(iso) - Date.now()) / 60_000);
+  if (m <= 0) return "Closed";
+  return m < 60 ? `Closes in ${m}m` : m < 2880 ? `Closes in ${Math.round(m / 60)}h` : `Closes in ${Math.round(m / 1440)}d`;
+};
+const gapOf = (m: MarketSummary) => (m.councilBps != null && m.tick ? (m.councilBps - m.tick.midBps) / 100 : null);
 
 export default function Home() {
   const [markets, setMarkets] = useState<MarketSummary[] | null>(null);
-  const [index, setIndex] = useState<{ value: number | null; series: { ts: number; value: number }[] }>({ value: null, series: [] });
-  const [pulses, setPulses] = useState<Record<string, number>>({});
+  const [index, setIndex] = useState<number | null>(null);
+  const [ledger, setLedger] = useState<Ledger | null>(null);
+  const [cat, setCat] = useState("All");
   const [err, setErr] = useState<string | null>(null);
   const { caps } = useStream();
   const load = useCallback(() => {
     api<MarketSummary[]>("/api/markets").then((m) => { setMarkets(m); setErr(null); }).catch((e: Error) => setErr(e.message));
-    api<typeof index>("/api/index").then(setIndex).catch(() => {});
+    api<{ value: number | null }>("/api/index").then((i) => setIndex(i.value)).catch(() => {});
+    api<Ledger>("/api/ledger").then(setLedger).catch(() => {});
   }, []);
   useEffect(() => { load(); const t = setInterval(load, 30_000); return () => clearInterval(t); }, [load]);
   useEvents((e) => {
-    if (e.type === "tick") {
-      setPulses((p) => ({ ...p, [e.symbol]: performance.now() }));
-      setMarkets((ms) => ms?.map((m) => (m.symbol === e.symbol && m.tick && m.tick.midBps !== e.midBps ? { ...m, tick: { ...m.tick, midBps: e.midBps, ts: e.ts } } : m)) ?? ms);
-    }
+    if (e.type === "tick") setMarkets((ms) => ms?.map((m) => (m.symbol === e.symbol && m.tick && m.tick.midBps !== e.midBps ? { ...m, tick: { ...m.tick, midBps: e.midBps, ts: e.ts } } : m)) ?? ms);
     if (e.type === "bias.update") setMarkets((ms) => ms?.map((m) => (m.symbol === e.report.symbol ? { ...m, irrationality: e.report.irrationality, edgeBps: e.report.edgeBps, topSignature: e.report.signatures.find((s) => s.score > 0) ?? null } : m)) ?? ms);
     if (e.type === "council.final") setMarkets((ms) => ms?.map((m) => (m.symbol === e.symbol ? { ...m, councilBps: e.forecast.pBps, forecastId: e.forecast.id } : m)) ?? ms);
-    if (e.type === "index.update") setIndex((i) => ({ value: e.value, series: [...i.series, { ts: e.ts, value: e.value }] }));
+    if (e.type === "index.update") setIndex(e.value);
   });
-  const sorted = [...(markets ?? [])].sort((a, b) => (b.irrationality ?? 0) - (a.irrationality ?? 0));
+  const cats = useMemo(() => ["All", ...new Set((markets ?? []).map((m) => m.category))], [markets]);
+  const sorted = [...(markets ?? [])].filter((m) => cat === "All" || m.category === cat).sort((a, b) => (b.irrationality ?? 0) - (a.irrationality ?? 0));
+  const top = sorted[0];
+  const brier = ledger?.onchain && ledger.onchain.count > 0 ? Number(ledger.onchain.meanBrierBps2) / 1e8 : null;
 
   return (
-    <motion.div {...page} className="mx-auto max-w-[1500px] px-4 pb-10 pt-6 sm:px-6">
-      <div className="flex flex-wrap items-end justify-between gap-6">
+    <div className="mx-auto max-w-[1280px] px-4 pb-16 pt-10 sm:px-6">
+      <section className="grid gap-8 lg:grid-cols-[1fr_420px] lg:items-end">
         <div>
-          <h1 className="display fluid-hero text-ink">The Probability <span className="italic text-oracle">Field</span></h1>
-          <p className="mt-2 max-w-xl text-sm text-muted">Every point is a live contract on Gemini&apos;s prediction-market sandbox. Cyan is a calm price; amber is a price the Bias Spectrometer can explain. A gold core means Cassandra has sealed a forecast.</p>
-        </div>
-        <div className="flex items-center gap-4">
-          {caps && caps.gemini.mode !== "live" && <Badge kind="fixture">fixture prices</Badge>}
-          <Gauge value={index.value} series={index.series} />
-        </div>
-      </div>
-
-      <div className="mt-6 grid gap-4 lg:grid-cols-[1fr_300px]">
-        <div className="hair relative hidden h-[min(68vh,700px)] overflow-hidden rounded-lg bg-surface/40 md:block">
-          {markets === null ? <FieldSkeleton err={err} /> : markets.length === 0 ? <Empty /> : <Field markets={markets} pulses={pulses} />}
-        </div>
-        <ol className="space-y-2 md:hidden">
-          {markets === null && Array.from({ length: 6 }).map((_, i) => <li key={i} className="skeleton h-16 rounded-lg" />)}
-          {sorted.map((m) => (
-            <li key={m.symbol}><Link href={`/m/${m.symbol}`} className="hair flex items-center justify-between gap-3 rounded-lg bg-surface/80 px-3 py-2.5">
-              <div className="min-w-0"><div className="truncate text-sm">{m.title}</div><div className="truncate text-xs text-muted">{m.label}{m.topSignature ? ` · ${BIAS_NAMES[m.topSignature.kind]}` : ""}</div></div>
-              <div className="text-right text-xs"><div className="num text-crowd">{pct(m.tick?.midBps)}</div><div className="num text-oracle">{pct(m.councilBps)}</div></div>
-            </Link></li>
-          ))}
-        </ol>
-        <aside className="hair h-[min(68vh,700px)] overflow-hidden rounded-lg bg-surface/60"><Ticker /></aside>
-      </div>
-
-      {sorted.length > 0 && (
-        <div className="mt-6 hidden md:block">
-          <div className="label mb-2">Most irrational right now</div>
-          <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-            {sorted.slice(0, 4).map((m, i) => (
-              <motion.div key={m.symbol} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0, transition: { delay: i * 0.04 } }}>
-                <Link href={`/m/${m.symbol}`} className="hair block rounded-lg bg-surface/70 px-3 py-2.5 transition-colors hover:border-white/20">
-                  <div className="truncate text-sm">{m.title}</div>
-                  <div className="truncate text-xs text-muted">{m.label}</div>
-                  <div className="mt-2 flex items-baseline justify-between text-xs">
-                    <span className="num text-crowd">{pct(m.tick?.midBps)}</span>
-                    <span className="text-muted">{m.topSignature ? BIAS_NAMES[m.topSignature.kind] : "no signature"}</span>
-                    <span className="num">{m.irrationality?.toFixed(0) ?? "—"}<span className="text-muted">/100</span></span>
-                  </div>
-                </Link>
-              </motion.div>
-            ))}
+          <h1 className="display fluid-hero max-w-2xl">AI forecasts you can audit, on Gemini prediction markets.</h1>
+          <p className="mt-3 max-w-xl text-[0.95rem] leading-relaxed text-muted">Four AI forecasters debate each Gemini market. Their probability is sealed on-chain before the market resolves, then scored. The agent trades the gap only inside limits you set.</p>
+          <div className="mt-5 flex flex-wrap gap-2">
+            {top && <Link href={`/m/${top.symbol}`} className="rounded-lg bg-ink px-4 py-2.5 text-sm font-medium text-white hover:bg-ink/85">Open the most mispriced market</Link>}
+            <Link href="/ledger" className="rounded-lg border border-hairline bg-white px-4 py-2.5 text-sm font-medium hover:border-ink/30">See the track record</Link>
           </div>
         </div>
-      )}
-    </motion.div>
-  );
-}
+        <dl className="grid grid-cols-2 overflow-hidden rounded-xl border border-hairline bg-white">
+          <Stat label="Markets tracked" value={markets?.length ?? null} />
+          <Stat label="Forecasts sealed" value={ledger?.counts.sealed ?? null} />
+          <Stat label="Market irrationality" value={index} fmt={(v) => `${v.toFixed(0)} / 100`} />
+          <Stat label="Mean Brier score" value={brier} fmt={(v) => v.toFixed(3)} hint={brier == null ? "after first resolution" : "lower is better"} />
+        </dl>
+      </section>
 
-function FieldSkeleton({ err }: { err: string | null }) {
-  return (
-    <div className="absolute inset-0 grid place-items-center">
-      <div className="relative h-48 w-48">{Array.from({ length: 9 }).map((_, i) => <span key={i} className="skeleton absolute rounded-full" style={{ width: 18 + (i % 3) * 10, height: 18 + (i % 3) * 10, left: `${(i * 37) % 80}%`, top: `${(i * 53) % 80}%` }} />)}</div>
-      <p className="absolute bottom-6 text-xs text-muted">{err ? `Engine unreachable (${err}). Start it with pnpm dev.` : "Awaiting first tick"}</p>
+      <div className="mt-10 grid gap-6 lg:grid-cols-[1fr_320px]">
+        <section>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex gap-1">
+              {cats.map((c) => <button key={c} onClick={() => setCat(c)} className={`rounded-full px-3 py-1.5 text-sm font-medium capitalize ${cat === c ? "bg-ink text-white" : "text-muted hover:bg-surface-2 hover:text-ink"}`}>{c}</button>)}
+            </div>
+            <span className="text-xs text-muted">Sorted by how mispriced the bias engine thinks they are{caps && caps.gemini.mode !== "live" ? " · " : ""}{caps && caps.gemini.mode !== "live" && <Badge kind="fixture">fixture prices</Badge>}</span>
+          </div>
+          {markets === null && !err && <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{Array.from({ length: 6 }).map((_, i) => <div key={i} className="skeleton h-44 rounded-xl" />)}</div>}
+          {err && <div className="rounded-xl border border-hairline bg-white p-8 text-center text-sm text-muted">{offline(err)}</div>}
+          {markets?.length === 0 && <div className="rounded-xl border border-hairline bg-white p-8 text-center text-sm text-muted">No markets tracked yet. The engine picks the most liquid sandbox markets on boot.</div>}
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {sorted.map((m, i) => <MarketCard key={m.symbol} m={m} i={i} />)}
+          </div>
+        </section>
+        <aside className="h-fit overflow-hidden rounded-xl border border-hairline bg-white lg:sticky lg:top-20">
+          <div className="flex items-center justify-between px-4 pt-4 pb-2"><h2 className="text-[0.95rem] font-semibold">Live activity</h2><span className="flex items-center gap-1.5 text-xs text-muted"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-scored" />streaming</span></div>
+          <div className="h-[560px]"><Ticker /></div>
+        </aside>
+      </div>
     </div>
   );
 }
-function Empty() {
-  return <div className="absolute inset-0 grid place-items-center text-sm text-muted">No contracts tracked yet. The engine tracks the most liquid sandbox markets on boot.</div>;
+
+function Stat({ label, value, fmt = (v: number) => v.toFixed(0), hint }: { label: string; value: number | null; fmt?: (v: number) => string; hint?: string }) {
+  return (
+    <div className="border-hairline p-4 [&:nth-child(-n+2)]:border-b [&:nth-child(odd)]:border-r">
+      <dt className="text-xs text-muted">{label}</dt>
+      <dd className="mt-1 text-2xl font-semibold tracking-tight"><Num value={value} format={fmt} /></dd>
+      {hint && <dd className="text-[0.7rem] text-muted">{hint}</dd>}
+    </div>
+  );
+}
+
+function MarketCard({ m, i }: { m: MarketSummary; i: number }) {
+  const gap = gapOf(m);
+  const sig = m.topSignature;
+  return (
+    <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0, transition: { delay: Math.min(i, 12) * 0.03 } }}>
+      <Link href={`/m/${m.symbol}`} className="flex h-full flex-col rounded-xl border border-hairline bg-white p-4 transition-shadow hover:border-ink/20 hover:shadow-[0_2px_12px_rgba(16,24,40,0.06)]">
+        <div className="flex items-center justify-between text-xs text-muted"><span className="capitalize">{m.category}</span><span>{closesIn(m.expiryDate)}</span></div>
+        <div className="mt-2 line-clamp-2 text-[0.95rem] font-medium leading-snug">{m.title}</div>
+        <div className="text-sm text-muted">{m.label}</div>
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <div className="rounded-lg bg-surface-2 px-3 py-2"><div className="text-[0.7rem] text-muted">Market</div><div className="num text-lg font-semibold">{pct(m.tick?.midBps, 0)}</div></div>
+          <div className="rounded-lg bg-orange-50 px-3 py-2"><div className="text-[0.7rem] text-oracle/80">Cassandra</div><div className="num text-lg font-semibold text-oracle">{pct(m.councilBps, 0)}</div></div>
+        </div>
+        <div className="mt-3 flex items-center justify-between text-xs">
+          <span className="truncate text-muted">{sig ? `${BIAS_NAMES[sig.kind]}${sig.magnitudeBps ? ` · ${(sig.magnitudeBps / 100).toFixed(1)} pts` : ""}` : "No bias detected"}</span>
+          {gap != null && Math.abs(gap) >= 0.5 && <span className={`num shrink-0 font-medium ${gap > 0 ? "text-scored" : "text-refused"}`}>{gap > 0 ? "+" : ""}{gap.toFixed(1)} pts</span>}
+        </div>
+      </Link>
+    </motion.div>
+  );
 }

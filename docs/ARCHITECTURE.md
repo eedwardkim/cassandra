@@ -11,7 +11,7 @@ flowchart LR
   B --> E[Executor]
   C --> E
   E -->|commit · reveal| L[CalibrationLedger.sol\nBSC Testnet]
-  E -->|check · recordTrade| P[AgentPolicy.sol\nBSC Testnet]
+  E -->|authorizeTrade · settleTrade| P[AgentPolicy.sol\nBSC Testnet]
   E -->|placeOrder| G
   E --> S[SSE /api/stream]
   S --> W[Next.js UI]
@@ -43,7 +43,7 @@ flowchart LR
    stored with the contract's reason string.
 6. **Trade**: IOC limit order in the Gemini sandbox at best ask + 1 tick. The attempt row is written *before*
    `placeOrder`; mutations are never retried; status is reconciled from `getOrderHistory`.
-7. **Record**: `recordTrade(marketKey, notional, edgeBps, category, keccak256(orderId))` from the agent wallet. The
+7. **Authorize, order, settle**: the agent calls `authorizeTrade(marketKey, notional, edgeBps, category, keccak256(clientOrderId))`; a revert stores the trade as refused and no order is sent. `gateway.placeAuthorized(txHash)` re-reads `TradeAuthorized` from the receipt, checks market, notional and clientOrderId against the stored row (unique `onchain_trade_id`), and only then places the IOC order with that clientOrderId. `settleTrade(tradeId, keccak256(orderId), filledNotional)` refunds the unfilled part of the reservation and emits `TradeRecorded`. The
    contract re-checks policy and reverts `PolicyViolation(reason)` if the leash was tightened in between.
 8. **Resolve** every 10 min: settled Gemini contracts → owner calls `resolve(marketKey, outcomeYes)` → `Scored` events.
 

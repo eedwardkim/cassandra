@@ -9,8 +9,6 @@ cd /app/apps/engine
 if [ "${CHAIN_NETWORK:-bscTestnet}" = "local" ]; then
   anvil --host 127.0.0.1 --port 8545 --chain-id 31337 --state /data/anvil.json --state-interval 15 --silent &
   i=0; until cast block-number --rpc-url http://127.0.0.1:8545 >/dev/null 2>&1; do i=$((i+1)); [ $i -gt 100 ] && exit 1; sleep 0.2; done
-  ADDR=$(node -e "try{console.log(require('/data/deployments/local.json').ledger)}catch{console.log('')}")
-  CODE=0x; [ -n "$ADDR" ] && CODE=$(cast code "$ADDR" --rpc-url http://127.0.0.1:8545 2>/dev/null || echo 0x)
-  [ "$CODE" = "0x" ] && npx tsx src/scripts/deploy.ts local
+  npx tsx src/scripts/deploy.ts local --if-stale
 fi
 exec npx tsx src/index.ts

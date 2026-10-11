@@ -9,6 +9,7 @@
     ".": "./src/index.ts",
     "./bias": "./src/bias/index.ts",
     "./hash": "./src/hash.ts",
+    "./abi": "./src/abi.ts",
     "./deployments/*": "./deployments/*"
   },
   "scripts": {

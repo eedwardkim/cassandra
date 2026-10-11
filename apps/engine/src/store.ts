@@ -21,7 +21,7 @@ export const toTrade = (r: TradeRow): Trade => ({
   id: String(r.id), symbol: r.symbol, forecastId: r.forecastId, createdAt: r.createdAt, outcome: r.outcome as "yes" | "no", priceBps: r.priceBps,
   quantity: String(r.quantity), notionalCents: r.notionalCents, edgeBps: r.edgeBps, category: CATS[r.category] ?? "other",
   policyOk: r.state !== "refused", policyReason: r.reason ?? "ok", orderId: r.orderId, orderStatus: r.orderStatus, filledQuantity: r.filledQuantity,
-  recordTx: r.recordTx, state: r.state as Trade["state"], error: r.state === "failed" ? r.reason : null, source: r.source as Trade["source"],
+  recordTx: r.recordTx, authorizeTx: r.authorizeTx ?? null, onchainTradeId: r.onchainTradeId ?? null, state: r.state as Trade["state"], error: r.state === "failed" ? r.reason : null, source: r.source as Trade["source"],
 });
 export const toForecast = (r: typeof forecasts.$inferSelect): Forecast => ({ ...(JSON.parse(r.json) as Forecast) });
 

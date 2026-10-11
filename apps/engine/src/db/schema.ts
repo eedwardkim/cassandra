@@ -108,6 +108,8 @@ export const trades = sqliteTable("trades", {
   filledQuantity: text("filled_quantity"),
   recordTx: text("record_tx"),
   recordBlock: integer("record_block"),
+  authorizeTx: text("authorize_tx"),
+  onchainTradeId: integer("onchain_trade_id"),
   network: text("network").notNull(),
   source: text("source").notNull(),
   createdAt: integer("created_at").notNull(),

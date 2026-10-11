@@ -33,7 +33,6 @@ export const config = {
   deploymentsDir: process.env.DEPLOYMENTS_DIR ?? new URL("../../../packages/shared/deployments/", import.meta.url).pathname,
   gemini: {
     apiKey: process.env.GEMINI_API_KEY ?? "",
-    apiSecret: process.env.GEMINI_API_SECRET ?? "",
     account: process.env.GEMINI_ACCOUNT ?? "primary",
     dryRun: bool(process.env.DRY_RUN_GEMINI) || !process.env.GEMINI_API_KEY,
   },
@@ -49,6 +48,8 @@ export const config = {
     rpcFallback: "https://bsc-testnet-rpc.publicnode.com",
     localRpcUrl: process.env.LOCAL_RPC_URL || "http://127.0.0.1:8545",
     ownerKey: isPrivateKey(process.env.OWNER_PRIVATE_KEY) ? (process.env.OWNER_PRIVATE_KEY.trim() as `0x${string}`) : null,
+    resolverKey: isPrivateKey(process.env.RESOLVER_PRIVATE_KEY) ? (process.env.RESOLVER_PRIVATE_KEY.trim() as `0x${string}`) : isPrivateKey(process.env.OWNER_PRIVATE_KEY) ? (process.env.OWNER_PRIVATE_KEY.trim() as `0x${string}`) : null,
+    ownerAddress: /^0x[0-9a-fA-F]{40}$/.test(process.env.OWNER_ADDRESS ?? "") ? (process.env.OWNER_ADDRESS as `0x${string}`) : null,
     agentKey: isPrivateKey(process.env.AGENT_PRIVATE_KEY) ? (process.env.AGENT_PRIVATE_KEY.trim() as `0x${string}`) : null,
     dryRun: bool(process.env.DRY_RUN_CHAIN),
   },

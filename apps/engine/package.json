@@ -11,6 +11,7 @@
     "capture": "tsx --env-file-if-exists=../../.env src/scripts/capture.ts",
     "demo:replay": "tsx --env-file-if-exists=../../.env src/scripts/replay.ts",
     "deploy:testnet": "tsx --env-file-if-exists=../../.env src/scripts/deploy.ts bscTestnet",
+    "scan:copy": "tsx --env-file-if-exists=../../.env src/scripts/scan-copy.ts",
     "deploy:local": "tsx --env-file-if-exists=../../.env src/scripts/deploy.ts local"
   },
   "dependencies": {

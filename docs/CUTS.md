@@ -10,3 +10,21 @@
 | 6 | **Context.dev Reporter step skipped** | No `CONTEXT_DEV_API_KEY`; the Reporter says it is working from the price path only. |
 | 7 | **Persona reasoning disabled** (`reasoning: "none"`) and arguments capped at 70 words | Model reasoning consumed the 350-token cap and truncated the JSON; fixed in the prompt/schema, never by retrying. |
 | 8 | **Engine on Fly.io runs anvil in the same machine** (state on a volume) | Keeps the deployed demo self-contained while the chain is local. Switch with `CHAIN_NETWORK=bscTestnet`. |
+
+## Leash and copy pass
+
+- **One shared Gemini sandbox account.** Every agent trades through the same sandbox key held by
+  `apps/engine/src/gateway.ts`. Per-user Gemini accounts are roadmap.
+- **Exchange-side enforcement.** The chain gates our gateway, not Gemini itself; Gemini checking `AgentPolicy`
+  before filling is next.
+- **Resolver = owner key in the demo.** `RESOLVER_PRIVATE_KEY` is supported but unset, so it falls back to
+  `OWNER_PRIVATE_KEY`. The policy owner address can still be a different wallet via `OWNER_ADDRESS`.
+- **Smoke opens the edge floor.** The leash proof sets min edge to 0 along with max per trade $0.00, because
+  `check()` tests edge before notional; `--open-leash` also sets min edge 0 for the positive trade. Both restore the
+  policy in a `finally`.
+- **Foundry `Deploy.s.sol`** still makes the deployer the owner; the viem deploy (`pnpm deploy:local|testnet`) is the
+  supported path and handles `OWNER_ADDRESS` via `transferOwnership`.
+- **Field legend.** The force-field home view was replaced by market cards in the redesign, so its legend copy is gone.
+- **`/rpc` and `/api/faucet-local`** exist only on the local chain. The passthrough also refuses `eth_sendTransaction`,
+  `eth_sign*` and `eth_accounts`, since anvil's dev accounts can send without a signature.
+

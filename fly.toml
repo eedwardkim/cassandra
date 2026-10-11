@@ -9,7 +9,7 @@ primary_region = "iad"
   TICK_SECONDS = "120"
   DEMO_MODE = "true"
   REVEAL_DELAY_SECONDS = "0"
-  COUNCIL_MAX_RUNS_PER_HOUR = "40"
+  COUNCIL_MAX_RUNS_PER_HOUR = "12"
 
 [http_service]
   internal_port = 4000

@@ -12,7 +12,7 @@
 | 0:00–0:15 | `/`: gauge settles; hover two nodes | "Every dot is a live Gemini prediction market. Color is how irrational its price is right now." |
 | 0:15–0:45 | Click the hottest node, **Run council now**; personas stream, the Judge card flips | "Market says N%. Four forecasters argue; the Judge lands at M% and names the bias." Read the top Bias Spectrometer row. |
 | 0:45–1:05 | Wax seal stamps; point at the Sealed tx hash and block | "Sealed on-chain before the world finds out. Cassandra can't rewrite her forecast later." |
-| 1:05–1:25 | Trade card: policy result + Gemini sandbox order id. `/policy`: drag **Max per trade** to $1.00, **Sign setPolicy**; back, Run council now: Trade card turns red with the contract's reason | "The agent trades inside limits the human set on-chain. Tighten the leash, and the chain refuses the next trade." |
+| 1:05–1:25 | Trade card: Chain approved → Order sent to Gemini → Fill recorded. `/policy`: **Connect wallet** (owner), drag **Max per trade** down, sign in the wallet; the next tick shows "Chain refused: notional exceeds max per trade. No order sent." | "The agent trades inside limits the human set on-chain. Tighten the leash, and the chain refuses the trade before it reaches Gemini." |
 | 1:25–1:50 | `/ledger`: Brier, replay rows, **verify** on a revealed row | "Resolved markets score her. Anyone can recompute the hash and see she was right before it was obvious." |
 | 1:50–2:00 | README "What we build next" | "Next: Gemini settlement as the resolver, staked forecaster reputation, an open registry." |
 

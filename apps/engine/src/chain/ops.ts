@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { agentPolicyAbi, calibrationLedgerAbi, type Policy } from "@cassandra/shared";
 import { db, schema } from "../db/index.js";
 import { log } from "../bus.js";
-import { agentAccount, agentWallet, chain, deployment, network, ownerWallet, policyContract, ledgerContract, publicClient, revertReason } from "./index.js";
+import { agentAccount, agentWallet, chain, deployment, network, resolverWallet, policyContract, ledgerContract, publicClient, revertReason } from "./index.js";
 
 const locks = new Map<WalletClient, Promise<unknown>>();
 /** Serialize writes per wallet so nonces never collide. */
@@ -42,22 +42,26 @@ export const revealForecast = (id: number, pBps: number, rHash: Hex, salt: Hex, 
   send(agentWallet, "reveal", ref, { ...ledgerContract(), functionName: "reveal", args: [BigInt(id), pBps, rHash, salt] });
 
 export async function resolveMarket(marketKey: Hex, outcomeYes: boolean, ref: string) {
-  const sent = await send(ownerWallet, "resolve", ref, { ...ledgerContract(), functionName: "resolve", args: [marketKey, outcomeYes] });
+  const sent = await send(resolverWallet, "resolve", ref, { ...ledgerContract(), functionName: "resolve", args: [marketKey, outcomeYes] });
   const scored = sent.receipt.logs.flatMap((l) => { try { const e = decodeEventLog({ abi: calibrationLedgerAbi, ...l }); return e.eventName === "Scored" ? [{ id: Number(e.args.id), brierBps2: Number(e.args.brierBps2) }] : []; } catch { return []; } });
   return { ...sent, scored };
 }
 
-export async function checkPolicy(notionalCents: number, edgeBps: number, category: number): Promise<{ ok: boolean; reason: string }> {
-  const [ok, reason] = await publicClient.readContract({ ...policyContract(), functionName: "check", args: [agentAccount!.address, BigInt(notionalCents), Math.max(0, Math.min(65535, edgeBps)), category] });
-  return { ok, reason };
+/** Reserve budget on AgentPolicy before any order exists. A revert means no order may be sent. */
+export async function authorizeTrade(marketKey: Hex, notionalCents: number, edgeBps: number, category: number, clientOrderIdHash: Hex, ref: string) {
+  try {
+    const sent = await send(agentWallet, "authorizeTrade", ref, { ...policyContract(), functionName: "authorizeTrade", args: [marketKey, BigInt(notionalCents), Math.max(0, Math.min(65535, edgeBps)), category, clientOrderIdHash] });
+    return { ok: true as const, ...sent };
+  } catch (err) {
+    return { ok: false as const, reason: revertReason(err).replace(/^PolicyViolation: /, "") };
+  }
 }
 
-export async function recordTrade(marketKey: Hex, notionalCents: number, edgeBps: number, category: number, orderIdHash: Hex, ref: string) {
-  try {
-    return { ok: true as const, ...(await send(agentWallet, "recordTrade", ref, { ...policyContract(), functionName: "recordTrade", args: [marketKey, BigInt(notionalCents), edgeBps, category, orderIdHash] })) };
-  } catch (err) {
-    return { ok: false as const, reason: revertReason(err) };
-  }
+export const settleTrade = (tradeId: number, orderIdHash: Hex, filledNotionalCents: number, ref: string) =>
+  send(agentWallet, "settleTrade", ref, { ...policyContract(), functionName: "settleTrade", args: [BigInt(tradeId), orderIdHash, BigInt(filledNotionalCents)] });
+
+export async function policyOwner(): Promise<Hex> {
+  return publicClient.readContract({ ...policyContract(), functionName: "owner" });
 }
 
 export async function getPolicy(): Promise<Policy & { spentTodayCents: number }> {
@@ -69,12 +73,6 @@ export async function getPolicy(): Promise<Policy & { spentTodayCents: number }>
   const [maxNotionalPerTrade, maxDailyNotional, minEdgeBps, allowedCategoryMask, paused] = p;
   return { maxNotionalPerTrade: Number(maxNotionalPerTrade), maxDailyNotional: Number(maxDailyNotional), minEdgeBps, allowedCategoryMask, paused, spentTodayCents: Number(spent) };
 }
-
-export const setPolicy = (p: Policy) =>
-  send(ownerWallet, "setPolicy", "policy", {
-    ...policyContract(), functionName: "setPolicy",
-    args: [agentAccount!.address, { maxNotionalPerTrade: BigInt(p.maxNotionalPerTrade), maxDailyNotional: BigInt(p.maxDailyNotional), minEdgeBps: p.minEdgeBps, allowedCategoryMask: p.allowedCategoryMask >>> 0, paused: p.paused }],
-  });
 
 export async function calibration() {
   const [count, sum, mean] = await publicClient.readContract({ ...ledgerContract(), functionName: "calibration", args: [agentAccount!.address] });

@@ -19,9 +19,9 @@ export const JudgeSchema = z.object({
   probability: z.number().min(0).max(1),
   lo80: z.number().min(0).max(1),
   hi80: z.number().min(0).max(1),
-  rationale: z.string().describe("At most 150 words"),
-  whatWouldChangeMyMind: z.array(z.string()).max(4),
-  biasHints: z.array(z.string()).max(4),
+  rationale: z.string().describe("At most 80 words. First sentence: 'Market X%, council Y%', then why they differ"),
+  whatWouldChangeMyMind: z.array(z.string().describe("One observable with a threshold and a date")).max(4),
+  biasHints: z.array(z.string().describe("Exactly one of: overround, favoriteLongshot, roundNumberAnchoring, herding, recencyShock")).max(4),
 });
 
 export interface CouncilContext {

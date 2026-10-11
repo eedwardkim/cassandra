@@ -1,15 +1,17 @@
 {
   "network": "local",
   "chainId": 31337,
-  "ledger": "0x0b339ee0a3dcda7ebc1c07d15da966f586dbad54",
-  "policy": "0x0b23d823f330f459523b9b2beca21dc8e21a93f3",
+  "ledger": "0xd05392965be7dbccb29de55c354ca367aca5e8f4",
+  "policy": "0xe684f2d444557fc3b28e5550c95f920f90b207a4",
   "owner": "0x96B259daae8666f7CD4848fB6B3DB9BD4f044a6c",
+  "resolver": "0x96B259daae8666f7CD4848fB6B3DB9BD4f044a6c",
   "agent": "0xB87A941e1316f03Bb0802463Dd7eC26FDf85177B",
-  "deployBlock": 43,
+  "codeHash": "0xb6242744b45a9c34ffeae492da35cb18efb84db3319d5d440932b23ed43cbaa0",
+  "deployBlock": 2546,
   "txs": {
-    "ledger": "0x0a678641446be729a6be924a85a0843e0ed93ca810855ed7f03abee810464f79",
-    "policy": "0x5808b7650c9cdef25a0086f863419f2e24d3213032cbd9071b46d87915c4ef30",
-    "setPolicy": "0x1cb471d095babf126e743a12a155bacb2dd7cbe285cda5af04a0c8b3af9183f7"
+    "ledger": "0x51019baebdca15c952af22f50eafdf8a1ab7b0405b8cb45d708384d89cb98f2a",
+    "policy": "0x4a1abd83759cfb705116b4b7040f3e92894d8e4fcbb53c66d6b96bb5834bb0e3",
+    "setPolicy": "0x83791a3f1fc7070219f57c973cf154c27cfd0bc21f04e594e0333118ca06cba3"
   },
-  "deployedAt": "2026-10-11T19:23:20.003Z"
+  "deployedAt": "2026-10-11T20:05:02.712Z"
 }

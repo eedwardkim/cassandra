@@ -72,7 +72,7 @@ function mapEvent(e: RawEvent, ts: number): DiscoveredEvent {
   };
 }
 
-const json = (v: unknown) => JSON.stringify(v, (_k, x) => (typeof x === "bigint" ? x.toString() : x), 2);
+export const json = (v: unknown) => JSON.stringify(v, (_k, x) => (typeof x === "bigint" ? x.toString() : x), 2);
 function readFixture<T>(name: string): T {
   const f = join(FIXTURES, `${name}.json`);
   if (!existsSync(f)) throw new Error(`fixture ${name} missing; run pnpm capture with live keys`);
@@ -83,16 +83,8 @@ export function writeFixture(name: string, data: unknown) {
   writeFileSync(join(FIXTURES, `${name}.json`), json(data));
 }
 
-let clientP: Promise<GeminiClient> | null = null;
-export function client(): Promise<GeminiClient> {
-  if (config.gemini.dryRun) throw new Error("Gemini is in fixture mode");
-  clientP ??= createClient({
-    env: "sandbox",
-    auth: new HmacAuth({ apiKey: config.gemini.apiKey, apiSecret: config.gemini.apiSecret, nonceMode: "time-based" }),
-    skipWsInit: true,
-  });
-  return clientP;
-}
+import { client } from "../gateway.js";
+export { client };
 
 export async function rawActiveEvents(): Promise<RawEvent[]> {
   if (config.gemini.dryRun) return readFixture<RawEvent[]>("events");
@@ -164,33 +156,6 @@ export async function settled(since: number): Promise<DiscoveredEvent[]> {
 }
 
 export interface PlacedOrder { orderId: string; status: string; filledQuantity: string; clientOrderId: string; raw: unknown }
-
-/** One immediate-or-cancel limit order. Never retried blindly: callers store the attempt first and reconcile via orderHistory(). */
-export async function placeIoc(p: { symbol: string; outcome: "yes" | "no"; priceBps: number; quantity: number; clientOrderId?: string }): Promise<PlacedOrder> {
-  if (config.gemini.dryRun) throw new Error("Gemini is in fixture mode; no orders are placed");
-  const c = await client();
-  const clientOrderId = p.clientOrderId ?? randomUUID();
-  const input = {
-    symbol: p.symbol, orderType: "limit" as const, side: "buy" as const, outcome: p.outcome, quantity: String(p.quantity),
-    price: fromBps(p.priceBps), timeInForce: "immediate-or-cancel" as const, makerOrCancel: false, clientOrderId, account: config.gemini.account,
-  };
-  let r;
-  try {
-    r = await c.predictions.placeOrder(input);
-  } catch (err) {
-    const e = err as { name?: string; field?: string; rule?: string; message?: string };
-    if (e.name === "AcceptTermsRequiredError" || /AcceptTerms/i.test(`${e.name} ${e.message}`)) {
-      log("warn", "Gemini terms not accepted; accepting once and retrying");
-      await c.predictions.acceptTerms({ account: config.gemini.account } as never);
-      r = await c.predictions.placeOrder(input);
-    } else {
-      if (e.name === "ValidationError") log("error", `Gemini ValidationError field=${e.field} rule=${e.rule}`);
-      throw err;
-    }
-  }
-  const o = r as unknown as { orderId: bigint | string; status: string; filledQuantity?: string };
-  return { orderId: String(o.orderId), status: o.status, filledQuantity: o.filledQuantity ?? "0", clientOrderId, raw: JSON.parse(json(r)) };
-}
 
 export async function orderHistory(symbol?: string): Promise<{ orderId: string; clientOrderId?: string; status: string; filledQuantity?: string }[]> {
   if (config.gemini.dryRun) return [];

@@ -3,8 +3,8 @@ import { animate, motion, useMotionValue, useReducedMotion, useTransform } from 
 import { useEffect, useState } from "react";
 
 export function Badge({ kind, children }: { kind: "fixture" | "replay" | "live" | "refused" | "scored"; children: React.ReactNode }) {
-  const c = { fixture: "border-oracle/50 text-oracle bg-oracle/10", replay: "border-crowd/40 text-crowd bg-crowd/10", live: "border-hairline text-muted", refused: "border-refused/50 text-refused bg-refused/10", scored: "border-scored/50 text-scored bg-scored/10" }[kind];
-  return <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[0.66rem] uppercase tracking-[0.12em] ${c}`}>{children}</span>;
+  const c = { fixture: "bg-amber-50 text-amber-800 ring-amber-200", replay: "bg-indigo-50 text-indigo-700 ring-indigo-200", live: "bg-surface-2 text-muted ring-hairline", refused: "bg-red-50 text-refused ring-red-200", scored: "bg-emerald-50 text-scored ring-emerald-200" }[kind];
+  return <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[0.7rem] font-medium ring-1 ring-inset ${c}`}>{children}</span>;
 }
 
 /** Spring-tweened number. */
@@ -27,7 +27,7 @@ export function Hash({ value, href }: { value?: string | null; href?: string | n
   if (!value) return <span className="num text-muted">—</span>;
   return (
     <span className="inline-flex items-center gap-1.5">
-      {href ? <a href={href} target="_blank" rel="noreferrer" className="num text-oracle hover:underline">{value.slice(0, 6)}…{value.slice(-4)}</a> : <span className="num">{value.slice(0, 6)}…{value.slice(-4)}</span>}
+      {href ? <a href={href} target="_blank" rel="noreferrer" className="num mono text-ink underline decoration-hairline underline-offset-2 hover:decoration-ink">{value.slice(0, 6)}…{value.slice(-4)}</a> : <span className="num mono">{value.slice(0, 6)}…{value.slice(-4)}</span>}
       <button aria-label="copy" onClick={() => { navigator.clipboard?.writeText(value); setCopied(true); setTimeout(() => setCopied(false), 1200); }} className="text-muted hover:text-ink">
         {copied ? <span className="text-[0.65rem] text-scored">copied</span> : (
           <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><rect x="5" y="5" width="9" height="9" rx="1.5" /><path d="M11 5V3.5A1.5 1.5 0 0 0 9.5 2h-6A1.5 1.5 0 0 0 2 3.5v6A1.5 1.5 0 0 0 3.5 11H5" /></svg>
@@ -39,8 +39,8 @@ export function Hash({ value, href }: { value?: string | null; href?: string | n
 
 export function Panel({ title, right, children, className = "" }: { title?: React.ReactNode; right?: React.ReactNode; children: React.ReactNode; className?: string }) {
   return (
-    <section className={`hair rounded-lg bg-surface/80 ${className}`}>
-      {title && <div className="flex items-center justify-between border-b border-hairline px-4 py-2.5"><span className="label">{title}</span>{right}</div>}
+    <section className={`hair rounded-xl bg-surface ${className}`}>
+      {title && <div className="flex items-center justify-between gap-3 px-5 pt-4 pb-1"><h2 className="text-[0.95rem] font-semibold">{title}</h2>{right}</div>}
       {children}
     </section>
   );

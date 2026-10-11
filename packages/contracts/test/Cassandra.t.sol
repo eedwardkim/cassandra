@@ -76,7 +76,7 @@ contract CassandraTest {
         require(!ok && keccak256(bytes(reason)) == keccak256("notional exceeds max per trade"), "reason");
         vm.prank(agent);
         vm.expectRevert(abi.encodeWithSelector(AgentPolicy.PolicyViolation.selector, "notional exceeds max per trade"));
-        policy.recordTrade(key, 2600, 500, 3, bytes32(uint256(1)));
+        policy.authorizeTrade(key, 2600, 500, 3, bytes32(uint256(1)));
     }
 
     function test_lowEdgeRefused() public {
@@ -86,19 +86,22 @@ contract CassandraTest {
 
     function test_pausedRefused() public {
         vm.prank(owner);
-        policy.setPolicy(agent, AgentPolicy.Policy(2500, 20000, 300, type(uint32).max, true));
+        policy.setPaused(agent, true);
         (bool ok, string memory reason) = policy.check(agent, 1000, 500, 3);
         require(!ok && keccak256(bytes(reason)) == keccak256("agent paused by owner"), "reason");
+        vm.prank(agent);
+        vm.expectRevert(abi.encodeWithSelector(AgentPolicy.PolicyViolation.selector, "agent paused by owner"));
+        policy.authorizeTrade(key, 1000, 500, 3, bytes32(uint256(1)));
     }
 
     function test_dayBucketRollover() public {
         vm.warp(10 days);
         vm.startPrank(agent);
-        for (uint256 i = 0; i < 8; i++) policy.recordTrade(key, 2500, 500, 3, bytes32(i));
+        for (uint256 i = 0; i < 8; i++) policy.authorizeTrade(key, 2500, 500, 3, bytes32(i));
         vm.expectRevert(abi.encodeWithSelector(AgentPolicy.PolicyViolation.selector, "daily notional limit reached"));
-        policy.recordTrade(key, 2500, 500, 3, bytes32(uint256(99)));
+        policy.authorizeTrade(key, 2500, 500, 3, bytes32(uint256(99)));
         vm.warp(11 days);
-        policy.recordTrade(key, 2500, 500, 3, bytes32(uint256(100)));
+        policy.authorizeTrade(key, 2500, 500, 3, bytes32(uint256(100)));
         vm.stopPrank();
         require(policy.spentToday(agent) == 2500, "rolled over");
     }
@@ -107,5 +110,63 @@ contract CassandraTest {
         vm.prank(agent);
         vm.expectRevert(AgentPolicy.NotOwner.selector);
         policy.setPolicy(agent, AgentPolicy.Policy(1e9, 1e9, 0, type(uint32).max, false));
+    }
+
+    function test_settleRefundsUnfilledNotional() public {
+        vm.startPrank(agent);
+        uint256 id = policy.authorizeTrade(key, 2000, 500, 3, keccak256("cid"));
+        require(policy.spentToday(agent) == 2000, "reserved");
+        policy.settleTrade(id, keccak256("order"), 600);
+        vm.stopPrank();
+        require(policy.spentToday(agent) == 600, "refunded unfilled");
+    }
+
+    function test_doubleSettleReverts() public {
+        vm.startPrank(agent);
+        uint256 id = policy.authorizeTrade(key, 2000, 500, 3, keccak256("cid"));
+        policy.settleTrade(id, keccak256("order"), 0);
+        vm.expectRevert(AgentPolicy.BadState.selector);
+        policy.settleTrade(id, keccak256("order"), 0);
+        vm.stopPrank();
+    }
+
+    function test_nonAgentSettleReverts() public {
+        vm.prank(agent);
+        uint256 id = policy.authorizeTrade(key, 2000, 500, 3, keccak256("cid"));
+        vm.prank(owner);
+        vm.expectRevert(AgentPolicy.NotAgent.selector);
+        policy.settleTrade(id, keccak256("order"), 0);
+    }
+
+    function test_overFillReverts() public {
+        vm.startPrank(agent);
+        uint256 id = policy.authorizeTrade(key, 2000, 500, 3, keccak256("cid"));
+        vm.expectRevert(AgentPolicy.OverFilled.selector);
+        policy.settleTrade(id, keccak256("order"), 2001);
+        vm.stopPrank();
+    }
+
+    function test_dailyCapCountsUnsettledReservations() public {
+        vm.startPrank(agent);
+        for (uint256 i = 0; i < 8; i++) policy.authorizeTrade(key, 2500, 500, 3, bytes32(i));
+        vm.expectRevert(abi.encodeWithSelector(AgentPolicy.PolicyViolation.selector, "daily notional limit reached"));
+        policy.authorizeTrade(key, 100, 500, 3, bytes32(uint256(99)));
+        vm.stopPrank();
+    }
+
+    function test_strangerCannotAuthorize() public {
+        vm.prank(address(0xBAD));
+        vm.expectRevert(abi.encodeWithSelector(AgentPolicy.PolicyViolation.selector, "no policy set for agent"));
+        policy.authorizeTrade(key, 100, 500, 3, bytes32(0));
+    }
+
+    function test_transferOwnershipMovesTheLeash() public {
+        vm.prank(owner);
+        policy.transferOwnership(address(0xCAFE));
+        vm.prank(owner);
+        vm.expectRevert(AgentPolicy.NotOwner.selector);
+        policy.setPaused(agent, true);
+        vm.prank(address(0xCAFE));
+        policy.setPaused(agent, true);
     }
 }

@@ -1,13 +1,18 @@
 /**
  * pnpm smoke — verifies the whole loop in-process against whatever adapters are live:
- * capability table → Gemini discovery + quotes → bias → council → commit/reveal → policy check → sandbox order → recordTrade.
- * Flags: --no-trade (skip the order), --symbol=GEMI-..., --services (also ping running engine :4000 and web :3000).
+ * capability table → Gemini discovery + quotes → bias → council → commit/reveal → leash proof (refused trade, no Gemini order) → authorizeTrade → sandbox order → settleTrade.
+ * Flags: --no-trade (skip the order), --open-leash (owner wallet sets min edge 0 for the positive trade, then restores), --symbol=GEMI-..., --services (also ping running engine :4000 and web :3000).
  */
 import { config } from "../config.js";
 import { chainLive, explorerTx } from "../chain/index.js";
 import { capabilities } from "../server.js";
 import { discoverAndTrack, pollQuotes, biasFor, lastDiscovery } from "../ingest.js";
-import { runPipeline } from "../executor/index.js";
+import { runPipeline, tradeGap } from "../executor/index.js";
+import { createWalletClient, http } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
+import { agentPolicyAbi, type Policy } from "@cassandra/shared";
+import { agentAccount, chain, deployment, publicClient } from "../chain/index.js";
+import * as ops from "../chain/ops.js";
 import { trackedContracts, latestTicks } from "../store.js";
 import * as gemini from "../gemini/index.js";
 
@@ -38,7 +43,7 @@ async function main() {
   if (!symbol) throw new Error("no quoted contract to run");
   const report = biasFor(symbol);
   ok(`BiasReport ${symbol}: irrationality ${report?.irrationality}, top ${report?.signatures[0]?.kind} ${report?.signatures[0]?.score.toFixed(2)}`);
-  const res = await runPipeline(symbol, { trade: !arg("no-trade") });
+  const res = await runPipeline(symbol, { trade: false });
   if (res.forecast) {
     ok(`Judge p=${(res.forecast.pBps / 100).toFixed(1)}% [${(res.forecast.loBps / 100).toFixed(1)}–${(res.forecast.hiBps / 100).toFixed(1)}] model ${res.forecast.model} hash ${res.forecast.reasoningHash}`);
     console.log(`     ${res.forecast.judge.rationale.slice(0, 220)}`);
@@ -50,14 +55,48 @@ async function main() {
     res.commit.revealTx ? ok(`reveal ${link(res.commit.revealTx)}`) : console.log("     reveal scheduled (REVEAL_DELAY_SECONDS > 0)");
   } else if (chainLive) fail("no commit");
 
-  if (!arg("no-trade")) {
-    console.log("\n[4] Policy + sandbox order + record");
-    const t = res.trade;
-    if (!t) fail("no trade attempt");
+  if (!arg("no-trade") && res.forecast && res.report) {
+    if (!chainLive || config.gemini.dryRun) fail("leash proof needs a live chain and live Gemini");
     else {
-      ok(`policy ${t.policyOk ? "ok" : "refused"}: ${t.policyReason} (edge ${t.edgeBps} bps, notional $${(t.notionalCents / 100).toFixed(2)})`);
-      if (t.orderId) ok(`Gemini sandbox order ${t.orderId} ${t.outcome} ${t.quantity} @ ${(t.priceBps / 100).toFixed(0)}¢ → ${t.orderStatus}`);
-      if (t.recordTx) ok(`TradeRecorded ${link(t.recordTx)}`);
+      // The owner signs here with OWNER_PRIVATE_KEY from env, standing in for the human's browser wallet.
+      const owner = createWalletClient({ account: privateKeyToAccount(config.chain.ownerKey!), chain, transport: http(config.chain.network === "local" ? config.chain.localRpcUrl : config.chain.rpcUrl) });
+      const setPolicy = async (p: Policy, label: string) => {
+        const hash = await owner.writeContract({ address: deployment!.policy, abi: agentPolicyAbi, functionName: "setPolicy", args: [agentAccount!.address, { ...p, maxNotionalPerTrade: BigInt(p.maxNotionalPerTrade), maxDailyNotional: BigInt(p.maxDailyNotional) }] });
+        await publicClient.waitForTransactionReceipt({ hash });
+        ok(`owner setPolicy (${label}) ${link(hash)}`);
+      };
+      const cur = await ops.getPolicy();
+      const policy: Policy = { maxNotionalPerTrade: cur.maxNotionalPerTrade, maxDailyNotional: cur.maxDailyNotional, minEdgeBps: cur.minEdgeBps, allowedCategoryMask: cur.allowedCategoryMask, paused: cur.paused };
+
+      console.log("\n[4] Leash: the chain refuses before Gemini sees anything");
+      const before = await gemini.orderHistory();
+      ok(`Gemini getOrderHistory count before: ${before.length}`);
+      // min edge 0 so the per-trade cap is the check that fires (check() tests edge before notional)
+      await setPolicy({ ...policy, maxNotionalPerTrade: 0, minEdgeBps: 0 }, "max per trade $0.00");
+      try {
+        const t = await tradeGap(res.forecast, res.report);
+        t.state === "refused" && t.policyReason === "notional exceeds max per trade"
+          ? ok(`tick refused: "${t.policyReason}" (notional $${(t.notionalCents / 100).toFixed(2)}, state ${t.state}, order id ${t.orderId ?? "none"})`)
+          : fail(`expected refusal, got ${t.state} ${t.policyReason}`);
+        const after = await gemini.orderHistory();
+        after.length === before.length ? ok(`Gemini getOrderHistory count after: ${after.length} (unchanged)`) : fail(`order count moved ${before.length} → ${after.length}`);
+      } finally {
+        await setPolicy(policy, "restored");
+      }
+
+      console.log("\n[5] Inside the leash: authorizeTrade → Gemini order → settleTrade");
+      if (arg("open-leash")) await setPolicy({ ...policy, minEdgeBps: 0 }, "min edge 0 for this run");
+      try {
+        const t = await tradeGap(res.forecast, res.report);
+        if (t.state === "refused") ok(`chain refused: ${t.policyReason}. No order sent.`);
+        else {
+          t.authorizeTx ? ok(`TradeAuthorized #${t.onchainTradeId} ${link(t.authorizeTx)}`) : fail("no authorize tx");
+          t.orderId ? ok(`Gemini sandbox order ${t.orderId} ${t.outcome} ${t.quantity} @ ${(t.priceBps / 100).toFixed(0)}¢ → ${t.orderStatus}, filled ${t.filledQuantity}`) : fail(`no order: ${t.error}`);
+          t.recordTx ? ok(`TradeRecorded (settleTrade) ${link(t.recordTx)}`) : fail("no settle tx");
+        }
+      } finally {
+        if (arg("open-leash")) await setPolicy(policy, "restored");
+      }
     }
   }
   console.log("\ncapabilities", JSON.stringify(await capabilities()));
