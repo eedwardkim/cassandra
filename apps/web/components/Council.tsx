@@ -1,0 +1,90 @@
+"use client";
+import { AnimatePresence, motion } from "framer-motion";
+import { pct, type Forecast } from "@/lib/api";
+
+export const PERSONAS = [
+  { key: "actuary", name: "The Actuary", role: "reference class & base rate" },
+  { key: "decomposer", name: "The Decomposer", role: "Fermi decomposition" },
+  { key: "skeptic", name: "The Skeptic", role: "argues the crowd is right" },
+  { key: "reporter", name: "The Reporter", role: "what changed in 72 h" },
+] as const;
+
+/** Pull the streamed argument text out of a partial JSON buffer. */
+export function argumentOf(buf: string): string {
+  const m = buf.match(/"argument"\s*:\s*"((?:[^"\\]|\\.)*)/);
+  return m ? m[1]!.replace(/\\n/g, " ").replace(/\\"/g, '"') : "";
+}
+const probOf = (buf: string) => { const m = buf.match(/"probability"\s*:\s*([0-9.]+)/); return m ? Number(m[1]) : null; };
+
+export function CouncilChamber({ forecast, live, running }: { forecast: Forecast | null; live: Record<string, string>; running: boolean }) {
+  return (
+    <div>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        {PERSONAS.map((p, i) => {
+          const buf = live[p.key];
+          const out = !running ? forecast?.personas[p.key] : undefined;
+          const text = buf != null ? argumentOf(buf) : out?.argument ?? "";
+          const prob = buf != null ? probOf(buf) : out?.probability ?? null;
+          const streaming = running && buf != null;
+          return (
+            <motion.article key={p.key} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: [0, 6, 6, 0][i] }} transition={{ delay: i * 0.04 }}
+              className={`hair rounded-lg bg-surface/80 p-3 ${streaming ? "border-oracle/30" : ""}`}>
+              <header className="flex items-baseline justify-between">
+                <div><div className="display text-lg leading-none">{p.name}</div><div className="mt-0.5 text-[0.68rem] text-muted">{p.role}</div></div>
+                <div className="num text-lg text-oracle">{prob != null ? `${(prob * 100).toFixed(0)}%` : "—"}</div>
+              </header>
+              <p className={`mt-2 min-h-[5.5rem] text-[0.8rem] leading-relaxed text-ink/85 ${streaming ? "caret" : ""}`}>
+                {text || <span className="text-muted">{running ? "thinking…" : "Run the council to hear this persona."}</span>}
+              </p>
+              {out?.cruxes?.length ? <ul className="mt-2 space-y-0.5 text-[0.7rem] text-muted">{out.cruxes.map((c) => <li key={c}>— {c}</li>)}</ul> : null}
+            </motion.article>
+          );
+        })}
+      </div>
+      <Judge forecast={running ? null : forecast} running={running} />
+    </div>
+  );
+}
+
+function Judge({ forecast, running }: { forecast: Forecast | null; running: boolean }) {
+  const p = forecast ? forecast.pBps / 10000 : null;
+  return (
+    <div className="mt-3 [perspective:1200px]">
+      <AnimatePresence mode="wait">
+        {forecast ? (
+          <motion.div key={forecast.id} initial={{ rotateX: -90, opacity: 0 }} animate={{ rotateX: 0, opacity: 1 }} transition={{ duration: 0.55, ease: [0.2, 0.8, 0.2, 1] }}
+            className="hair rounded-lg bg-surface-2 p-4" style={{ transformOrigin: "top" }}>
+            <div className="flex flex-wrap items-center gap-5">
+              <Dial p={p!} lo={forecast.loBps / 10000} hi={forecast.hiBps / 10000} market={forecast.marketMidBps / 10000} />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-baseline gap-3"><span className="display text-2xl">The Judge</span><span className="label">80% interval {pct(forecast.loBps, 0)}–{pct(forecast.hiBps, 0)}</span></div>
+                <p className="mt-1 text-[0.82rem] leading-relaxed text-ink/85">{forecast.judge.rationale}</p>
+                {forecast.judge.biasHints.length > 0 && <div className="mt-2 flex flex-wrap gap-1.5">{forecast.judge.biasHints.map((b) => <span key={b} className="rounded-full border border-oracle/30 px-2 py-0.5 text-[0.68rem] text-oracle">{b}</span>)}</div>}
+                {forecast.judge.whatWouldChangeMyMind.length > 0 && <div className="mt-2 text-[0.72rem] text-muted"><span className="label mr-1">would change my mind</span>{forecast.judge.whatWouldChangeMyMind.join(" · ")}</div>}
+              </div>
+            </div>
+          </motion.div>
+        ) : (
+          <motion.div key="wait" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, rotateX: 90 }} className="hair grid h-28 place-items-center rounded-lg bg-surface/50 text-sm text-muted">
+            {running ? "The Judge is weighing four arguments in logit space" : "No forecast yet for this contract"}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function Dial({ p, lo, hi, market }: { p: number; lo: number; hi: number; market: number }) {
+  const r = 38, c = 2 * Math.PI * r;
+  const pos = (x: number) => ({ x: 48 + r * Math.sin(x * 2 * Math.PI), y: 48 - r * Math.cos(x * 2 * Math.PI) });
+  const m = pos(market);
+  return (
+    <svg width="96" height="96" viewBox="0 0 96 96" aria-label={`Judge ${(p * 100).toFixed(0)}%`}>
+      <circle cx="48" cy="48" r={r} stroke="rgba(255,255,255,0.08)" strokeWidth="6" fill="none" />
+      <circle cx="48" cy="48" r={r} stroke="rgba(245,176,65,0.25)" strokeWidth="6" fill="none" strokeDasharray={`${(hi - lo) * c} ${c}`} transform={`rotate(${lo * 360 - 90} 48 48)`} />
+      <motion.circle cx="48" cy="48" r={r} stroke="#F5B041" strokeWidth="2.5" fill="none" strokeLinecap="round" initial={{ strokeDasharray: `0 ${c}` }} animate={{ strokeDasharray: `${p * c} ${c}` }} transition={{ duration: 0.9, ease: "easeOut" }} transform="rotate(-90 48 48)" />
+      <circle cx={m.x} cy={m.y} r="3.5" fill="#5DD6F2" />
+      <text x="48" y="53" textAnchor="middle" className="num" fill="#E8E6E1" fontSize="17">{(p * 100).toFixed(0)}%</text>
+    </svg>
+  );
+}
