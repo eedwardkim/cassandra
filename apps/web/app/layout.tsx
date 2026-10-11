@@ -6,8 +6,8 @@ import { StreamProvider } from "@/components/stream";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Cassandra — AI forecasts you can audit",
-  description: "Cassandra was always right and never believed. Now she has a ledger.",
+  title: "Cassandra",
+  description: "AI forecasts on Gemini prediction markets, recorded on-chain before each market closes.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

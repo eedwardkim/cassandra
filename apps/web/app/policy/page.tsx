@@ -40,7 +40,7 @@ export default function PolicyPage() {
   return (
     <motion.div {...page} className="mx-auto max-w-[1300px] px-4 pb-12 pt-6 sm:px-6">
       <h1 className="text-2xl font-semibold tracking-tight">Spending limits</h1>
-      <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-muted">The agent cannot place a trade outside these limits. Every order needs an on-chain approval first; the contract rejects any trade that breaks a limit before anything reaches Gemini. Only the owner wallet can change them.</p>
+      <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-muted">Each trade is checked against these limits on-chain before an order goes to Gemini. Only the owner wallet can change them.</p>
       {err && <div className="mt-4 text-sm text-refused">{offline(err)}</div>}
       {s && !s.live && <div className="mt-4"><Badge kind="fixture">chain dry-run: policy is not on-chain</Badge></div>}
 

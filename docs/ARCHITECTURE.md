@@ -22,7 +22,7 @@ flowchart LR
 | Path | What it is |
 | --- | --- |
 | `apps/engine` | Fastify on Node 22. Ingest, bias, council, executor, chain client, REST + SSE on :4000 |
-| `apps/web` | Next.js App Router. Field `/`, Dossier `/m/[symbol]`, Ledger `/ledger`, Spending limits `/policy` on :3000 |
+| `apps/web` | Next.js App Router. Markets `/`, market page `/m/[symbol]`, Track record `/ledger`, Spending limits `/policy` on :3000 |
 | `packages/shared` | zod schemas, the Bias Spectrometer (pure functions + vitest), commitment hashing, contract ABIs |
 | `packages/contracts` | Foundry: `CalibrationLedger.sol`, `AgentPolicy.sol`, `Deploy.s.sol`, forge tests |
 | `fixtures/gemini` | Real sandbox responses captured by `pnpm capture`, served only when `DRY_RUN_GEMINI=true` |

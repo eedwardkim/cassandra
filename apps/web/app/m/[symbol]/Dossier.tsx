@@ -94,7 +94,7 @@ export function Dossier({ symbol }: { symbol: string }) {
         </div>
 
         <div className="space-y-5 lg:sticky lg:top-20 lg:h-fit">
-          <Panel title="Cassandra's call" right={trade?.source && trade.source !== "live" ? <Badge kind="fixture">{trade.source}</Badge> : null}>
+          <Panel title="Trade" right={trade?.source && trade.source !== "live" ? <Badge kind="fixture">{trade.source}</Badge> : null}>
             <div className="px-5 pb-5">
               <div className="mt-2 grid grid-cols-2 gap-2">
                 <div className={`rounded-lg px-3 py-2.5 text-center text-sm font-semibold ${side === "YES" ? "bg-emerald-50 text-scored ring-1 ring-emerald-200" : "bg-surface-2 text-muted"}`}>Buy YES</div>
@@ -109,7 +109,7 @@ export function Dossier({ symbol }: { symbol: string }) {
               </dl>
               {trade && <div className="mt-4 border-t border-hairline pt-4"><Steps t={trade} explorer={explorer} /></div>}
               {trade?.error && trade.state !== "refused" && <p className="mt-3 text-xs text-refused">{trade.error}</p>}
-              <button onClick={run} disabled={running || caps?.llm.mode !== "live"} className="mt-5 w-full rounded-lg bg-ink px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-ink/85 disabled:opacity-50">{running ? "Forecasters are debating…" : "Run a new forecast"}</button>
+              <button onClick={run} disabled={running || caps?.llm.mode !== "live"} className="mt-5 w-full rounded-lg bg-ink px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-ink/85 disabled:opacity-50">{running ? "Running forecast…" : "Run a new forecast"}</button>
               {caps?.llm.mode !== "live" && <p className="mt-2 text-center text-xs text-muted">LLM is in dry-run; no forecasts are generated.</p>}
             </div>
           </Panel>

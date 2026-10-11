@@ -21,8 +21,8 @@ export default function LedgerPage() {
 
   return (
     <motion.div {...page} className="mx-auto max-w-[1300px] px-4 pb-12 pt-6 sm:px-6">
-      <h1 className="display fluid-hero">Proof of <span className="italic text-oracle">Calibration</span></h1>
-      <p className="mt-2 max-w-2xl text-sm text-muted">Each forecast is committed as a hash before resolution, revealed, then scored on-chain by the CalibrationLedger contract. Brier score: lower is better; 0.25 is a coin flip.</p>
+      <h1 className="text-2xl font-semibold tracking-tight">Track record</h1>
+      <p className="mt-2 max-w-2xl text-sm text-muted">Each forecast is recorded on-chain as a hash before the market closes, revealed after, and scored when the market resolves. Brier score: lower is better; always guessing 50% scores 0.25.</p>
       {caps?.chain.network === "local" && <div className="mt-3"><Badge kind="fixture">local anvil chain, not BSC Testnet</Badge></div>}
 
       <div className="mt-6 grid gap-4 lg:grid-cols-[1fr_1fr_1.2fr]">
@@ -40,14 +40,14 @@ export default function LedgerPage() {
         <Panel title="Reliability (10 bins)"><div className="p-3"><Reliability rows={scored} /></div></Panel>
       </div>
 
-      <Panel title="Every commitment, newest first" className="mt-4">
+      <Panel title="All forecasts" className="mt-4">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[820px] text-sm">
             <thead><tr className="text-left">{["Time", "Market", "p", "Outcome", "Brier", "Commit", "Reveal", "Score", ""].map((h) => <th key={h} className="label px-4 py-2 font-normal">{h}</th>)}</tr></thead>
             <tbody className="divide-y divide-hairline">
               {!l && !err && Array.from({ length: 4 }).map((_, i) => <tr key={i}><td colSpan={9} className="px-4 py-2"><div className="skeleton h-5 rounded" /></td></tr>)}
               {err && <tr><td colSpan={9} className="px-4 py-6 text-center text-muted">{offline(err)}</td></tr>}
-              {l && l.commits.length === 0 && <tr><td colSpan={9} className="px-4 py-6 text-center text-muted">No sealed forecasts yet. Run the council on any market.</td></tr>}
+              {l && l.commits.length === 0 && <tr><td colSpan={9} className="px-4 py-6 text-center text-muted">No forecasts yet.</td></tr>}
               {l?.commits.map((c, i) => (
                 <motion.tr key={c.id} initial={{ opacity: 0 }} animate={{ opacity: 1, transition: { delay: Math.min(i, 20) * 0.04 } }} className="hover:bg-black/[0.04]">
                   <td className="num px-4 py-2 text-xs text-muted">{new Date(c.createdAt).toISOString().slice(5, 16).replace("T", " ")}</td>
@@ -86,7 +86,7 @@ function Verify({ c }: { c: LedgerRow }) {
           {result ? (<>
             <div className="mt-2 break-all"><span className="text-muted">computed </span><span className="num">{result.h}</span></div>
             <div className="mt-1 break-all"><span className="text-muted">on-chain </span><span className="num">{c.commitment}</span></div>
-            <div className={`mt-2 ${result.ok ? "text-scored" : "text-refused"}`}>{result.ok ? "Match. The revealed forecast is the one sealed before resolution." : "Mismatch."}</div>
+            <div className={`mt-2 ${result.ok ? "text-scored" : "text-refused"}`}>{result.ok ? "Matches the hash recorded before the market closed." : "Mismatch."}</div>
           </>) : <div className="mt-2 text-muted">Not revealed yet; the salt stays secret until reveal.</div>}
         </motion.div>
       )}

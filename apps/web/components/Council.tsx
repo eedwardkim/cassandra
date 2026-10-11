@@ -63,13 +63,13 @@ function Judge({ forecast, running }: { forecast: Forecast | null; running: bool
                 <div className="flex items-baseline gap-3"><span className="text-base font-semibold">Judge</span><span className="label">80% interval {pct(forecast.loBps, 0)}–{pct(forecast.hiBps, 0)}</span></div>
                 <p className="mt-1 text-[0.82rem] leading-relaxed text-ink/85">{forecast.judge.rationale}</p>
                 {forecast.judge.biasHints.length > 0 && <div className="mt-2 flex flex-wrap gap-1.5">{forecast.judge.biasHints.map((b) => <span key={b} className="rounded-full border border-oracle/30 px-2 py-0.5 text-[0.68rem] text-oracle">{b}</span>)}</div>}
-                {forecast.judge.whatWouldChangeMyMind.length > 0 && <div className="mt-2 text-[0.72rem] text-muted"><span className="label mr-1">would change my mind</span>{forecast.judge.whatWouldChangeMyMind.join(" · ")}</div>}
+                {forecast.judge.whatWouldChangeMyMind.length > 0 && <div className="mt-2 text-[0.72rem] text-muted"><span className="label mr-1">Would change the forecast</span>{forecast.judge.whatWouldChangeMyMind.join(" · ")}</div>}
               </div>
             </div>
           </motion.div>
         ) : (
           <motion.div key="wait" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="hair grid h-28 place-items-center rounded-lg bg-surface/50 text-sm text-muted">
-            {running ? "Trimmed mean of 4 forecasts, log-odds" : "No forecast yet for this contract"}
+            {running ? "Trimmed mean of 4 forecasts, log-odds" : "No forecast yet"}
           </motion.div>
         )}
       </AnimatePresence>

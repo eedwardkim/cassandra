@@ -63,7 +63,7 @@ export default function Home() {
       <section className="flex flex-wrap items-end justify-between gap-6 border-b border-hairline pb-6">
         <div className="max-w-xl">
           <h1 className="text-2xl font-semibold tracking-tight">Markets</h1>
-          <p className="mt-1.5 text-sm leading-relaxed text-muted">Four AI forecasters price each Gemini sandbox contract. The forecast is sealed on-chain before the market closes and scored when it resolves. The agent trades the gap only inside limits the owner signs.</p>
+          <p className="mt-1.5 text-sm leading-relaxed text-muted">Four AI models estimate a probability for each Gemini sandbox market. The combined forecast is recorded on-chain before the market closes and scored after it resolves. If it differs enough from the market price, an agent places a trade, within limits the owner sets.</p>
         </div>
         <dl className="flex flex-wrap gap-x-8 gap-y-3">
           <Stat label="Forecasts sealed" value={ledger?.counts.sealed ?? null} />

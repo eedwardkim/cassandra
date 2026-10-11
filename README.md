@@ -1,31 +1,27 @@
-# CASSANDRA
+# Cassandra
 
-*Cassandra was always right and never believed. Now she has a ledger.*
-
-A proof-of-calibration network for prediction markets. A council of adversarial AI forecasters seals its probability
-on-chain before an event resolves, a deterministic Bias Spectrometer names the cognitive biases distorting the live
-price, and a policy-bound agent wallet trades the gap in the Gemini prediction-market sandbox.
+AI forecasts on Gemini prediction markets, recorded on-chain before each market closes and scored after it resolves.
+An agent trades when the forecast and the market price differ, and a contract the owner controls caps what it can spend.
 
 **Live:** [cassandra-amber.vercel.app](https://cassandra-amber.vercel.app) · engine
 [cassandra-engine.fly.dev/api/capabilities](https://cassandra-engine.fly.dev/api/capabilities)
 
 ![20-second demo](docs/demo.gif)
 
-> **Chain status: local anvil (chain 31337), not BSC Testnet.** Every transaction below is real but local, because no
-> free faucet would fund a fresh wallet ([docs/CUTS.md](docs/CUTS.md)). `pnpm deploy:testnet` moves it to chain 97.
+> **Chain status: local anvil (chain 31337), not BSC Testnet.** The transactions below are real but on a local chain,
+> because no free faucet would fund a new wallet ([docs/CUTS.md](docs/CUTS.md)). `pnpm deploy:testnet` moves it to chain 97.
 
 ## What it does
 
-1. **Names the bias.** Not "the market is wrong" but "this price carries 1.4 points of overround; here is the
-   arithmetic." Five pure detectors run over stored order-book ticks.
-2. **Argues before it speaks.** The Actuary, the Decomposer, the Skeptic and the Reporter stream their cases; a Judge
-   pools them in logit space. The whole debate is hashed into the on-chain commitment.
-3. **Proves calibration.** Commit, reveal, then a Brier score on resolution. Anyone can check she was right before it
-   was obvious.
-4. **Trades only inside the owner's spending limits.** The agent cannot place a trade outside these limits. Every order needs an on-chain approval
-   first; the contract reverts out-of-policy trades before anything reaches Gemini. The owner's browser wallet signs
-   the limits on `/policy`. The Gemini sandbox key lives only in the order gateway; exchange-side enforcement (Gemini
-   checking the policy contract itself) is next.
+1. **Bias detectors.** Five pure functions over stored order-book ticks report how much of a price comes from known
+   pricing biases, with the arithmetic (for example, "1.4 points of overround").
+2. **Forecast.** Four model personas (Actuary, Decomposer, Skeptic, Reporter) each give a probability and argument; a
+   Judge combines them in log-odds. The full debate is hashed into the on-chain record.
+3. **Track record.** Each forecast is committed as a hash, revealed, and given a Brier score when the market resolves
+   (`packages/contracts/src/CalibrationLedger.sol`).
+4. **Spending limits.** Every order needs an on-chain approval from `AgentPolicy.sol` first. If a trade breaks a limit,
+   the contract reverts and no order is sent to Gemini. The owner's browser wallet sets the limits on `/policy`. The
+   Gemini sandbox key lives only in `apps/engine/src/gateway.ts`; Gemini itself does not check the contract yet.
 
 ## Architecture
 
@@ -48,7 +44,7 @@ flowchart LR
 
 Details in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-## Why this isn't hard-coded
+## Checking the numbers
 
 **Recompute a commitment.** `GET /api/markets/:symbol` returns each commit's `marketKey`, `pBps`, `reasoningHash` and
 `salt` once revealed. `GET /api/forecasts/:id` returns the personas and Judge JSON.
@@ -63,7 +59,7 @@ carries its `evidence`. Overround on a binary contract: `sum = yesAsk + noAsk`, 
 Composite: `irrationality = 100 × (1 − Π(1 − wₖ·scoreₖ))` with the weights in `packages/shared/src/bias/index.ts`.
 `pnpm --filter @cassandra/shared test` runs a firing and a null test for every detector.
 
-**Fixtures never leak.** With `DRY_RUN_*` set or a key missing, `/api/capabilities` says so and the UI paints an amber
+**Test data is labeled.** With `DRY_RUN_*` set or a key missing, `/api/capabilities` says so and the UI paints an amber
 "fixture" or "dry-run" badge on every affected number. Without an LLM key the council refuses to forecast.
 
 ## Setup
@@ -106,9 +102,8 @@ Inside the limits: `authorizeTrade`
 - **Per-user Gemini accounts.** The demo trades through one shared Gemini sandbox account; each owner should bring
   their own exchange account, with Gemini checking the policy contract before it fills.
 
-- **Gemini settlement attestations as the resolver.** Today the owner wallet resolves; production reads signed
-  settlement from the exchange so nobody grades their own forecaster.
-- **Reputation staking for forecasters.** Stake behind your Brier score; slash on miscalibration.
-- **An open forecaster registry.** Any agent can commit to the ledger; capital allocators follow the calibrated ones.
-- **Reveal at resolution.** The demo reveals immediately; production reveals at settlement so a strong forecaster
-  cannot be copy-traded.
+- **Gemini settlement as the resolver.** Today our server key resolves markets; it should read signed settlement data
+  from the exchange instead.
+- **Staking on forecasts.** Forecasters post a stake that is cut when their Brier score is poor.
+- **Open registry.** Any agent can commit forecasts to the ledger and build a public score.
+- **Reveal at resolution.** The demo reveals immediately; it should reveal at settlement so others cannot copy the trade.
