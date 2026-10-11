@@ -97,7 +97,7 @@ async function councilRun(ctx: CouncilContext, runId: string): Promise<CouncilRe
         : "\n\nNo web context is available this run. Work only from the price path and say so."
       : "";
     const res = streamObject({
-      model: getModel(), schema: PersonaSchema, maxOutputTokens: 350, maxRetries: 1, reasoning: "none",
+      model: getModel(), schema: PersonaSchema, maxOutputTokens: 700, maxRetries: 1, reasoning: "none",
       system: p.system, prompt: `${block}${extra}\n\nGive your probability for YES.`,
     });
     let lastLen = 0;
@@ -115,7 +115,7 @@ async function councilRun(ctx: CouncilContext, runId: string): Promise<CouncilRe
   const byName = Object.fromEntries(personas) as Record<PersonaName, PersonaOutput>;
 
   const judgeRes = await generateObject({
-    model: getModel(), schema: JudgeSchema, maxOutputTokens: 600, maxRetries: 1, reasoning: "none",
+    model: getModel(), schema: JudgeSchema, maxOutputTokens: 1200, maxRetries: 1, reasoning: "none",
     system: JUDGE_SYSTEM,
     prompt: `${block}\n\nPersona forecasts:\n${personas.map(([n, o]) => `${n}: p=${o.probability.toFixed(3)} conf=${o.confidence.toFixed(2)}\n  ${o.argument}\n  cruxes: ${o.cruxes.join("; ")}`).join("\n")}`,
   });

@@ -111,10 +111,10 @@ function Row({ t, explorer }: { t: Trade; explorer: string | null }) {
   const refused = t.state === "refused" || t.state === "failed";
   return (
     <tr className={refused ? "bg-refused/[0.04]" : ""}>
-      <td className="num px-4 py-2 text-xs text-muted">{new Date(t.createdAt).toISOString().slice(11, 19)}</td>
-      <td className="px-4 py-2 text-xs"><Link href={`/m/${t.symbol}`} className="num hover:text-oracle">{t.symbol.replace("GEMI-", "")}</Link> {t.source !== "live" && <Badge kind="fixture">{t.source}</Badge>}</td>
-      <td className="num px-4 py-2 text-xs">{t.quantity} {t.outcome.toUpperCase()} @ {pct(t.priceBps, 0)}</td>
-      <td className="num px-4 py-2 text-xs">{t.edgeBps} bps</td>
+      <td className="num whitespace-nowrap px-4 py-2 text-xs text-muted">{new Date(t.createdAt).toISOString().slice(11, 19)}</td>
+      <td className="whitespace-nowrap px-4 py-2 text-xs"><Link href={`/m/${t.symbol}`} className="num hover:text-oracle">{t.symbol.replace("GEMI-", "")}</Link> {t.source !== "live" && <Badge kind="fixture">{t.source}</Badge>}</td>
+      <td className="num whitespace-nowrap px-4 py-2 text-xs">{t.quantity} {t.outcome.toUpperCase()} @ {pct(t.priceBps, 0)}</td>
+      <td className="num whitespace-nowrap px-4 py-2 text-xs">{(t.edgeBps / 100).toFixed(1)} pts</td>
       <td className="num px-4 py-2 text-xs">{usd(t.notionalCents)}</td>
       {t.state === "refused" ? <td colSpan={3} className="px-4 py-2 text-xs text-refused">{blocked(t.policyReason)}</td> : (<>
       <td className="px-4 py-2 text-xs">{t.authorizeTx ? <Hash value={t.authorizeTx} href={explorer ? explorer + t.authorizeTx : null} /> : "—"}</td>

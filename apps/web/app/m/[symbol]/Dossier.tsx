@@ -2,12 +2,14 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { api, blocked, pct, usd, BIAS_NAMES, type MarketDetail, type Commit, type Trade, offline } from "@/lib/api";
+import { api, blocked, pct, usd, BIAS_NAMES, type MarketDetail, type Commit, type Trade, offline, runError } from "@/lib/api";
 import { useEvents, useStream } from "@/components/stream";
 import { PriceChart } from "@/components/PriceChart";
 import { CouncilChamber } from "@/components/Council";
 import { SealTimeline } from "@/components/Seal";
 import { Badge, Hash, Num, Panel, page } from "@/components/ui";
+
+const pts = (bps: number) => `${(bps / 100).toFixed(1)} pts`;
 
 export function Dossier({ symbol }: { symbol: string }) {
   const [d, setD] = useState<MarketDetail | null>(null);
@@ -48,8 +50,8 @@ export function Dossier({ symbol }: { symbol: string }) {
   const trade = (d?.forecast ? d.trades.find((t) => t.forecastId === d.forecast!.id) : d?.trades[0]) ?? null;
   const tradePolicy = policy ?? (trade ? { ok: trade.policyOk, reason: trade.policyReason, edgeBps: trade.edgeBps, notionalCents: trade.notionalCents } : null);
 
-  // the side actually traded for this forecast wins over the side implied by today's moving price
-  const tradedSide = d?.forecast ? d.trades?.find((t) => t.forecastId === d.forecast!.id && t.state !== "refused")?.outcome : undefined;
+  // the side the executor actually chose (from the trade-time book) wins over the side implied by today's moving price
+  const tradedSide = trade && d?.forecast && trade.forecastId === d.forecast.id ? trade.outcome : undefined;
   const side = tradedSide ? (tradedSide === "yes" ? "YES" : "NO") : d?.forecast && d.tick ? (d.forecast.pBps >= d.tick.midBps ? "YES" : "NO") : null;
   const gap = d?.forecast && d.tick ? (d.forecast.pBps - d.tick.midBps) / 100 : null;
   return (
@@ -61,7 +63,7 @@ export function Dossier({ symbol }: { symbol: string }) {
           <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted"><span className="font-medium text-ink">{d?.label}</span>{d?.expiryDate && <span>· resolves {new Date(d.expiryDate).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>}{d && d.source !== "live" && <Badge kind="fixture">{d.source}</Badge>}</div>
         </div>
       </div>
-      {runErr && <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-refused">{runErr}</div>}
+      {runErr && <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-refused">{runError(runErr)}{d?.forecast && <span className="text-muted"> Below is the previous forecast from {new Date(d.forecast.createdAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}.</span>}</div>}
 
       <div className="mt-6 grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="space-y-5">
@@ -102,7 +104,7 @@ export function Dossier({ symbol }: { symbol: string }) {
               </div>
               <dl className="mt-4 space-y-2.5 text-sm">
                 <Row k="Gap vs market">{gap != null ? `${gap > 0 ? "+" : ""}${gap.toFixed(1)} pts` : "—"}</Row>
-                <Row k="Edge after spread and fees">{tradePolicy ? `${tradePolicy.edgeBps} bps` : d?.bias ? `${d.bias.edgeBps} bps` : "—"}</Row>
+                <Row k="Edge after spread and fees">{tradePolicy ? pts(tradePolicy.edgeBps) : d?.bias ? pts(d.bias.edgeBps) : "—"}</Row>
                 <Row k="Order size">{usd(tradePolicy?.notionalCents)}</Row>
                 {!trade && <Row k="Trade"><span className={tradePolicy ? (tradePolicy.ok ? "text-scored" : "text-refused") : "text-muted"}>{tradePolicy ? (tradePolicy.ok ? "Approved on-chain" : blocked(tradePolicy.reason)) : d?.forecast ? "None for this forecast" : "No forecast yet"}</span></Row>}
                 {trade?.orderId && <Row k="Fill">{trade.orderStatus ?? "sent"} · {trade.filledQuantity ?? "0"} of {trade.quantity} {trade.outcome.toUpperCase()} @ {pct(trade.priceBps, 0)}</Row>}

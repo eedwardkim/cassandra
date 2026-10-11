@@ -39,3 +39,9 @@ export const BIAS_NAMES: Record<string, string> = {
   overround: "Overround", favoriteLongshot: "Favorite–longshot", roundNumberAnchoring: "Round-number anchoring",
   herding: "Herding", recencyShock: "Recency shock", wishfulThinking: "Wishful thinking", horizonNeglect: "Horizon neglect",
 };
+
+/** Engine run errors are internal; show what happened and that nothing new was recorded. */
+export const runError = (msg: string) =>
+  /could not parse|No object generated/i.test(msg) ? "The forecast didn't finish: the model returned malformed output. Nothing new was sealed or traded."
+  : /MAX_RUNS_PER_HOUR|forecast limit/i.test(msg) ? "Hourly forecast limit reached. Try again later."
+  : msg;
