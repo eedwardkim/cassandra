@@ -4,7 +4,7 @@ import { chainLive, publicClient } from "./chain/index.js";
 import * as ops from "./chain/ops.js";
 import { buildServer, capabilities, setLatestBlock } from "./server.js";
 import { computeBiasAll, discoverAndTrack, pollQuotes, setPolicyMinEdge, writeIndex } from "./ingest.js";
-import { runPipeline, councilBudgetLeft } from "./executor/index.js";
+import { runPipeline, councilBudgetLeft, reconcileTrades } from "./executor/index.js";
 import { resolveSettled } from "./executor/resolve.js";
 import { latestForecast, trackedContracts } from "./store.js";
 import { bus } from "./bus.js";
@@ -31,6 +31,7 @@ const every = (ms: number, name: string, fn: () => Promise<unknown>) => {
 async function main() {
   if (chainLive) {
     await ops.reconcilePending();
+    await reconcileTrades().catch((e) => log("warn", `trade reconcile: ${(e as Error).message}`));
     try { setPolicyMinEdge((await ops.getPolicy()).minEdgeBps); } catch (e) { log("warn", `policy read failed: ${(e as Error).message}`); }
     publicClient.watchBlockNumber({ emitOnBegin: true, poll: true, pollingInterval: 4000, onBlockNumber: (b) => { setLatestBlock(Number(b)); bus.emit({ type: "block", number: Number(b) }); }, onError: () => {} });
   }

@@ -2,13 +2,13 @@ import { randomBytes, randomUUID } from "node:crypto";
 import * as V from "viem";
 import { agentPolicyAbi } from "@cassandra/shared";
 import * as gateway from "../gateway.js";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type { Hex } from "viem";
 import { commitmentHash, marketKey, orderIdHash, type Forecast, type BiasReport } from "@cassandra/shared";
 import { config } from "../config.js";
 import { bus, log } from "../bus.js";
 import { db, schema } from "../db/index.js";
-import { chainLive, network, chain } from "../chain/index.js";
+import { chainLive, network, chain, publicClient } from "../chain/index.js";
 import * as ops from "../chain/ops.js";
 import * as gemini from "../gemini/index.js";
 import { runCouncil, llmLive, councilBudgetLeft, type CouncilContext } from "../council/index.js";
@@ -112,7 +112,8 @@ export async function seal(f: Forecast, source: "live" | "replay" = "live") {
 /** authorizeTrade on-chain → gateway places the IOC order → settleTrade on-chain. */
 export async function tradeGap(f: Forecast, report: BiasReport) {
   const already = db.select().from(trades).where(and(eq(trades.forecastId, f.id), eq(trades.network, network))).all();
-  if (already.some((t) => t.state !== "refused")) return toTrade(already[0]!);
+  const open = already.find((t) => t.state !== "refused");
+  if (open) return toTrade(open);
   const c = contractOf(f.symbol)!;
   const t = latestTicks([f.symbol]).get(f.symbol);
   if (!t) throw new Error("no fresh quote");
@@ -131,7 +132,9 @@ export async function tradeGap(f: Forecast, report: BiasReport) {
   const row = db.insert(trades).values({ ...base, state: "authorizing" }).returning().get();
   const set = (v: Partial<typeof trades.$inferInsert>) => db.update(trades).set({ ...v, updatedAt: Date.now() }).where(eq(trades.id, row.id)).returning().get();
   // 1. the chain approves first; a revert means no order is ever sent
-  const auth = await ops.authorizeTrade(marketKey(f.symbol), notionalCents, edge, category, V.keccak256(V.toBytes(base.clientOrderId)), String(row.id));
+  let auth: Awaited<ReturnType<typeof ops.authorizeTrade>>;
+  try { auth = await ops.authorizeTrade(marketKey(f.symbol), notionalCents, edge, category, V.keccak256(V.toBytes(base.clientOrderId)), String(row.id)); }
+  catch (err) { set({ state: "failed", reason: `authorization not sent: ${(err as Error).message.slice(0, 200)}` }); throw err; }
   bus.emit({ type: "policy.checked", symbol: f.symbol, ok: auth.ok, reason: auth.ok ? "ok" : auth.reason, edgeBps: edge, notionalCents });
   if (!auth.ok) {
     const r = set({ state: "refused", reason: auth.reason });
@@ -153,10 +156,32 @@ export async function tradeGap(f: Forecast, report: BiasReport) {
   }
   // 3. settle: unfilled notional returns to the day's budget
   const filledCents = placed ? Math.min(notionalCents, Math.floor((Number(placed.filledQuantity || 0) * priceBps) / 100)) : 0;
+  // if settling throws, the row stays placed/authorized and reconcileTrades() settles it on the next boot
   const st = await ops.settleTrade(tradeId, placed ? orderIdHash(placed.orderId) : V.zeroHash, filledCents, String(row.id));
   const done = set({ state: placed ? "settled" : "failed", reason: failure, recordTx: st.hash, recordBlock: st.block });
   bus.emit({ type: placed ? "trade.settled" : "trade.refused", trade: toTrade(done) });
   return toTrade(done);
+}
+
+/** On boot: settle authorizations a crash left open, so reserved budget is released. Never re-sends an order. */
+export async function reconcileTrades() {
+  const stuck = db.select().from(trades).where(and(eq(trades.network, network), inArray(trades.state, ["checking", "authorizing", "authorized", "placing", "placed"]))).all();
+  for (const t of stuck) {
+    const set = (v: Partial<typeof trades.$inferInsert>) => db.update(trades).set({ ...v, updatedAt: Date.now() }).where(eq(trades.id, t.id)).run();
+    try {
+      if (!t.authorizeTx) { set({ state: "failed", reason: "engine stopped before the authorization confirmed" }); continue; }
+      const receipt = await publicClient.getTransactionReceipt({ hash: t.authorizeTx as Hex });
+      const ev = receipt.logs.map((l) => { try { return V.decodeEventLog({ abi: agentPolicyAbi, ...l }); } catch { return null; } }).find((e) => e?.eventName === "TradeAuthorized");
+      if (!ev || ev.eventName !== "TradeAuthorized") { set({ state: "failed", reason: "authorization receipt has no TradeAuthorized" }); continue; }
+      const found = t.state === "placing" || t.state === "placed" ? (await gemini.orderHistory(t.symbol)).find((o) => o.clientOrderId === t.clientOrderId) : undefined;
+      const filled = found ? Math.min(t.notionalCents, Math.floor((Number(found.filledQuantity ?? 0) * t.priceBps) / 100)) : 0;
+      const st = await ops.settleTrade(Number(ev.args.tradeId), found ? orderIdHash(found.orderId) : V.zeroHash, filled, String(t.id));
+      set({ state: found ? "settled" : "failed", orderId: found?.orderId ?? t.orderId, orderStatus: found?.status ?? t.orderStatus, filledQuantity: found?.filledQuantity ?? t.filledQuantity, recordTx: st.hash, recordBlock: st.block, reason: found ? t.reason : t.reason ?? "settled on restart without an order" });
+      log("info", `reconciled trade ${t.id}: settled ${st.hash}`);
+    } catch (e) {
+      log("warn", `reconcile trade ${t.id}: ${(e as Error).message.slice(0, 200)}`);
+    }
+  }
 }
 
 export interface PipelineResult { report: BiasReport | null; forecast: Forecast | null; commit: ReturnType<typeof toCommit> | null; trade: ReturnType<typeof toTrade> | null; steps: string[] }
@@ -180,7 +205,9 @@ export async function runPipeline(symbol: string, opts: { force?: boolean; trade
     const commit = await seal(forecast);
     steps.push(`sealed ${commit.commitTx}`);
     let trade = null;
-    if (opts.trade !== false && report) {
+    const triedRecently = db.select().from(trades).where(and(eq(trades.forecastId, forecast.id), eq(trades.network, network))).all().some((t) => Date.now() - t.createdAt < 15 * 60_000);
+    if (triedRecently && !opts.force) steps.push("trade skipped (attempted for this forecast in the last 15 min)");
+    else if (opts.trade !== false && report) {
       try { trade = await tradeGap(forecast, report); steps.push(`trade ${trade.state} ${trade.orderId ?? trade.policyReason}`); }
       catch (err) { steps.push(`trade error ${(err as Error).message}`); log("error", `trade ${symbol}: ${(err as Error).message}`); }
     }

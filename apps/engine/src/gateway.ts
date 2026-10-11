@@ -4,7 +4,7 @@
  */
 import { createClient, HmacAuth } from "@gemini-markets/sdk/server";
 import { decodeEventLog, keccak256, toBytes, type Hex } from "viem";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { agentPolicyAbi } from "@cassandra/shared";
 import { config } from "./config.js";
 import { log } from "./bus.js";
@@ -66,7 +66,9 @@ export async function placeAuthorized(authorizeTx: Hex): Promise<PlacedOrder | n
   if (keccak256(toBytes(row.symbol)) !== marketKey) throw new Error("market does not match the authorized marketKey");
   if (BigInt(Math.ceil((row.quantity * row.priceBps) / 100)) > notional) throw new Error("order notional exceeds the authorized notional");
   // claim the on-chain tradeId; the unique index rejects a second order for the same authorization
-  db.update(schema.trades).set({ onchainTradeId: Number(tradeId), state: "placing", updatedAt: Date.now() }).where(eq(schema.trades.id, row.id)).run();
+  const claim = db.update(schema.trades).set({ onchainTradeId: Number(tradeId), state: "placing", updatedAt: Date.now() })
+    .where(and(eq(schema.trades.id, row.id), eq(schema.trades.state, "authorized"), isNull(schema.trades.onchainTradeId))).run();
+  if (claim.changes !== 1) throw new Error(`authorization ${authorizeTx} was already used`);
   try {
     return await placeIoc({ symbol: row.symbol, outcome: row.outcome as "yes" | "no", priceBps: row.priceBps, quantity: row.quantity, clientOrderId: row.clientOrderId });
   } catch (err) {

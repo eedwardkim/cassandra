@@ -41,8 +41,9 @@ function marketSummary(symbol: string) {
 }
 
 let policyOwnerAddr: string | null = null;
+const forcedRuns = new Map<string, number>();
 export async function buildServer() {
-  const app = Fastify({ logger: false });
+  const app = Fastify({ logger: false, trustProxy: true });
   await app.register(cors, { origin: true });
 
   app.get("/health", async () => ({ ok: true, service: "engine", ts: Date.now() }));
@@ -85,8 +86,9 @@ export async function buildServer() {
   });
   // Policy writes are signed by the owner's own wallet in the browser; the engine holds no key that can call setPolicy/setPaused.
   // Local anvil only: a JSON-RPC passthrough so a browser wallet can reach the chain, and a one-shot gas faucet.
-  const RPC_DENY = /^(eth_sendTransaction|eth_sign|eth_signTransaction|eth_signTypedData.*|eth_accounts|eth_requestAccounts|eth_coinbase)$/;
-  const rpcAllowed = (m: unknown) => typeof m === "string" && (/^eth_/.test(m) || m === "net_version" || m === "web3_clientVersion") && !RPC_DENY.test(m);
+  // explicit list: anvil also answers eth_sendUnsignedTransaction, which would let anyone send as the owner
+  const RPC_ALLOW = new Set(["eth_chainId", "eth_blockNumber", "eth_getBalance", "eth_getCode", "eth_getStorageAt", "eth_call", "eth_estimateGas", "eth_gasPrice", "eth_maxPriorityFeePerGas", "eth_feeHistory", "eth_getTransactionCount", "eth_getTransactionByHash", "eth_getTransactionReceipt", "eth_getBlockByNumber", "eth_getBlockByHash", "eth_getLogs", "eth_sendRawTransaction", "eth_syncing", "net_version", "web3_clientVersion"]);
+  const rpcAllowed = (m: unknown) => typeof m === "string" && RPC_ALLOW.has(m);
   app.post("/rpc", async (req, reply) => {
     if (network !== "local") return reply.code(404).send({ error: "rpc passthrough exists only on the local chain" });
     const body = req.body as { method?: unknown; id?: unknown } | { method?: unknown; id?: unknown }[];
@@ -116,6 +118,11 @@ export async function buildServer() {
   app.post<{ Params: { symbol: string } }>("/api/run/:symbol", async (req, reply) => {
     if (!contractOf(req.params.symbol)) return reply.code(404).send({ error: "unknown symbol" });
     const force = (req.query as { force?: string }).force === "1";
+    if (force) {
+      const last = forcedRuns.get(req.ip) ?? 0;
+      if (Date.now() - last < 120_000) return reply.code(429).send({ error: "One fresh forecast per visitor every 2 minutes." });
+      forcedRuns.set(req.ip, Date.now());
+    }
     runPipeline(req.params.symbol, { force })
       .then((r) => log("info", `run ${req.params.symbol}: ${r.steps.join(" → ")}`))
       .catch((e) => log("error", `run ${req.params.symbol}: ${(e as Error).message}`));

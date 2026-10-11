@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { agentPolicyAbi, calibrationLedgerAbi, type Policy } from "@cassandra/shared";
 import { db, schema } from "../db/index.js";
 import { log } from "../bus.js";
-import { agentAccount, agentWallet, chain, deployment, network, resolverWallet, policyContract, ledgerContract, publicClient, revertReason } from "./index.js";
+import { agentAccount, agentWallet, chain, deployment, network, resolverWallet, policyContract, ledgerContract, publicClient, revertReason, isRevert } from "./index.js";
 
 const locks = new Map<WalletClient, Promise<unknown>>();
 /** Serialize writes per wallet so nonces never collide. */
@@ -53,6 +53,7 @@ export async function authorizeTrade(marketKey: Hex, notionalCents: number, edge
     const sent = await send(agentWallet, "authorizeTrade", ref, { ...policyContract(), functionName: "authorizeTrade", args: [marketKey, BigInt(notionalCents), Math.max(0, Math.min(65535, edgeBps)), category, clientOrderIdHash] });
     return { ok: true as const, ...sent };
   } catch (err) {
+    if (!isRevert(err)) throw err; // an RPC failure is not a policy refusal
     return { ok: false as const, reason: revertReason(err).replace(/^PolicyViolation: /, "") };
   }
 }

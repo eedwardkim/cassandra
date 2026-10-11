@@ -52,6 +52,8 @@ export function revertReason(err: unknown): string {
   return (err as Error).message;
 }
 
+export const isRevert = (err: unknown) => err instanceof BaseError && !!err.walk((e) => e instanceof ContractFunctionRevertedError);
+
 export const ledgerContract = () => ({ address: deployment!.ledger, abi: calibrationLedgerAbi });
 export const policyContract = () => ({ address: deployment!.policy, abi: agentPolicyAbi });
 

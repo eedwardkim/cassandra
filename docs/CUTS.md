@@ -30,3 +30,7 @@
 
 - **MetaMask warns on the demo domain.** MetaMask (13.50) labels `cassandra-amber.vercel.app` "Malicious" when it asks to
   add chain 31337. Signing still works after the warning. Not reported to MetaMask/Blockaid yet; a custom domain is the fix.
+- **`/rpc` uses an explicit method list, not `eth_*`.** Anvil answers `eth_sendUnsignedTransaction`, which sends as any
+  funded address (including the policy owner) without a signature. Only read methods and `eth_sendRawTransaction` pass.
+- **Forced council runs are limited to one per visitor every 2 minutes** (`POST /api/run/:symbol?force=1`), so a stranger
+  can't burn the hourly council budget.
