@@ -30,7 +30,7 @@ export const config = {
   trackedTarget: num(process.env.TRACKED_CONTRACTS, 24),
   dbPath: process.env.ENGINE_DB ?? new URL("../engine.db", import.meta.url).pathname,
   fixturesDir: new URL("../../../fixtures/", import.meta.url).pathname,
-  deploymentsDir: new URL("../../../packages/shared/deployments/", import.meta.url).pathname,
+  deploymentsDir: process.env.DEPLOYMENTS_DIR ?? new URL("../../../packages/shared/deployments/", import.meta.url).pathname,
   gemini: {
     apiKey: process.env.GEMINI_API_KEY ?? "",
     apiSecret: process.env.GEMINI_API_SECRET ?? "",
