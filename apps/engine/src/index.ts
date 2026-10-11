@@ -54,7 +54,8 @@ async function main() {
     if (!llmLive || process.env.AUTO_COUNCIL === "false") return;
     // at most two automatic council runs per tick: the hottest stale contracts
     const due = reports
-      .filter((r) => { const f = latestForecast(r.symbol); return !f || Date.now() - f.createdAt > 3600_000 || r.irrationality >= 35; })
+      // stale after an hour, on a hot bias score, or once the market has moved 8+ points since the council priced it
+      .filter((r) => { const f = latestForecast(r.symbol); return !f || Date.now() - f.createdAt > 3600_000 || r.irrationality >= 35 || Math.abs(r.midBps - f.marketMidBps) >= 800; })
       .filter((r) => { const f = latestForecast(r.symbol); return !f || Date.now() - f.createdAt > 15 * 60_000; })
       .sort((a, b) => b.irrationality - a.irrationality).slice(0, config.demo ? 1 : 2);
     for (const r of due) {
