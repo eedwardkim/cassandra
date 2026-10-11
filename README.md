@@ -87,8 +87,8 @@ Deploy: `fly deploy` (engine + anvil, state on a volume; see `fly.toml`) and `ve
 
 | | Local chain (31337, live demo) | BSC Testnet (97) |
 | --- | --- | --- |
-| CalibrationLedger | `0x0b339ee0a3dcda7ebc1c07d15da966f586dbad54` | pending tBNB |
-| AgentPolicy | `0x0b23d823f330f459523b9b2beca21dc8e21a93f3` | pending tBNB |
+| CalibrationLedger | `0x06b58ca279bfe09009f1538a5ee21579426858e0` | pending tBNB |
+| AgentPolicy | `0x83df7b742a1c828d6b24a83b11e8fc66d3c08c2e` | pending tBNB |
 | Agent | `0xB87A941e1316f03Bb0802463Dd7eC26FDf85177B` | same |
 | Policy owner (human wallet) | `0x96B259daae8666f7CD4848fB6B3DB9BD4f044a6c` | same |
 | Ledger resolver (server key) | same address in this demo (`RESOLVER_PRIVATE_KEY` falls back to `OWNER_PRIVATE_KEY`) | same |
