@@ -46,8 +46,11 @@ export const runError = (msg: string) =>
   : /MAX_RUNS_PER_HOUR|forecast limit/i.test(msg) ? "Hourly forecast limit reached. Try again later."
   : msg;
 
-/** GEMI-SOL2610122100-HI112 → "SOL 112+" */
+/** GEMI-SOL2610122100-HI112 → "SOL $112+", GEMI-XRP2610112300-HI1D38 → "XRP $1.38+", GEMI-SOL15M2610112215-UP → "SOL 15m up" */
 export const marketLabel = (sym: string) => {
-  const m = sym.match(/^GEMI-([A-Z]+)\d+-HI([\d.]+)$/);
-  return m ? `${m[1]} ${m[2]}+` : sym.replace("GEMI-", "");
+  const hi = sym.match(/^GEMI-([A-Z]+)\d+-HI([\dD.]+)$/);
+  if (hi) return `${hi[1]} $${Number(hi[2]!.replace("D", ".")).toLocaleString("en-US")}+`;
+  const up = sym.match(/^GEMI-([A-Z]+?)(\d+)M\d+-UP$/);
+  if (up) return `${up[1]} ${up[2]}m up`;
+  return sym.replace("GEMI-", "");
 };

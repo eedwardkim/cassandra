@@ -92,10 +92,10 @@ export default function PolicyPage() {
           </Panel>
           <Panel title="Trade history">
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[720px] text-sm">
-                <thead><tr className="text-left">{["Time", "Market", "Order", "Edge", "Size", "Approval", "Gemini order", "Fill"].map((h) => <th key={h} className="label px-4 py-2 font-normal">{h}</th>)}</tr></thead>
+              <table className="w-full min-w-[640px] text-sm">
+                <thead><tr className="text-left">{["Time", "Market", "Order", "Edge", "Approval", "Gemini order", "Fill"].map((h) => <th key={h} className="label px-4 py-2 font-normal">{h}</th>)}</tr></thead>
                 <tbody className="divide-y divide-hairline">
-                  {s && s.trades.length === 0 && <tr><td colSpan={8} className="px-4 py-6 text-center text-muted">No trade attempts yet</td></tr>}
+                  {s && s.trades.length === 0 && <tr><td colSpan={7} className="px-4 py-6 text-center text-muted">No trade attempts yet</td></tr>}
                   {s?.trades.map((t) => <Row key={t.id} t={t} explorer={explorer} />)}
                 </tbody>
               </table>
@@ -113,12 +113,11 @@ function Row({ t, explorer }: { t: Trade; explorer: string | null }) {
     <tr className={refused ? "bg-refused/[0.04]" : ""}>
       <td className="num whitespace-nowrap px-4 py-2 text-xs text-muted">{new Date(t.createdAt).toISOString().slice(11, 19)}</td>
       <td className="whitespace-nowrap px-4 py-2 text-xs"><Link href={`/m/${t.symbol}`} title={t.symbol} className="num hover:text-oracle">{marketLabel(t.symbol)}</Link> {t.source !== "live" && <Badge kind="fixture">{t.source}</Badge>}</td>
-      <td className="num whitespace-nowrap px-4 py-2 text-xs">{t.quantity} {t.outcome.toUpperCase()} @ {pct(t.priceBps, 0)}</td>
+      <td className="num whitespace-nowrap px-4 py-2 text-xs">{t.quantity} {t.outcome.toUpperCase()} @ {pct(t.priceBps, 0)} <span className="text-muted">· {usd(t.notionalCents)}</span></td>
       <td className="num whitespace-nowrap px-4 py-2 text-xs">{(t.edgeBps / 100).toFixed(1)} pts</td>
-      <td className="num px-4 py-2 text-xs">{usd(t.notionalCents)}</td>
       {t.state === "refused" ? <td colSpan={3} className="px-4 py-2 text-xs text-refused">{blocked(t.policyReason)}</td> : (<>
       <td className="px-4 py-2 text-xs">{t.authorizeTx ? <Hash value={t.authorizeTx} href={explorer ? explorer + t.authorizeTx : null} /> : "—"}</td>
-      <td className="num px-4 py-2 text-xs">{t.orderId ?? "—"}{t.orderStatus && <span className="ml-1 text-muted">{t.orderStatus}</span>}</td>
+      <td className="num px-4 py-2 text-xs">{t.orderId ?? "—"}{t.orderStatus && <div className="text-muted">{t.orderStatus}</div>}</td>
       <td className="px-4 py-2 text-xs">{t.state === "failed" && !t.recordTx ? <span className="text-refused">{t.error}</span> : t.recordTx ? <Hash value={t.recordTx} href={explorer ? explorer + t.recordTx : null} /> : <span className="text-muted">{t.state}</span>}</td>
       </>)}
     </tr>
