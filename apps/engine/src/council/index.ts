@@ -57,19 +57,36 @@ export function contextBlock(c: CouncilContext): string {
 }
 
 const runTimes: number[] = [];
-export function councilBudgetLeft(): number {
+const forcedTimes: number[] = [];
+/** Button presses ("Run a new forecast") draw from their own hourly pool so the automatic loop can't starve them. */
+const FORCED_PER_HOUR = 8;
+export function councilBudgetLeft(forced = false): number {
   const cutoff = Date.now() - 3600_000;
-  while (runTimes.length && runTimes[0]! < cutoff) runTimes.shift();
-  return config.councilMaxRunsPerHour - runTimes.length;
+  const times = forced ? forcedTimes : runTimes;
+  while (times.length && times[0]! < cutoff) times.shift();
+  return (forced ? FORCED_PER_HOUR : config.councilMaxRunsPerHour) - times.length;
 }
 
 export interface CouncilResult { forecast: Forecast; personas: Record<PersonaName, PersonaOutput>; judge: JudgeOutput }
 
 /** Four adversarial personas stream in parallel, then the Judge aggregates. Streams council.delta / council.final over SSE. */
-export async function runCouncil(ctx: CouncilContext, runId = randomUUID()): Promise<CouncilResult> {
+export async function runCouncil(ctx: CouncilContext, runId = randomUUID(), forced = false): Promise<CouncilResult> {
   if (!llmLive) throw new Error("LLM is in dry-run mode (no ANTHROPIC_API_KEY/OPENAI_API_KEY or DRY_RUN_LLM=true); refusing to fabricate a forecast");
-  if (councilBudgetLeft() <= 0) throw new Error(`COUNCIL_MAX_RUNS_PER_HOUR=${config.councilMaxRunsPerHour} reached`);
-  runTimes.push(Date.now());
+  if (councilBudgetLeft(forced) <= 0) throw new Error(forced ? `manual forecast limit (${FORCED_PER_HOUR}/hour) reached` : `COUNCIL_MAX_RUNS_PER_HOUR=${config.councilMaxRunsPerHour} reached`);
+  const times = forced ? forcedTimes : runTimes;
+  const at = Date.now();
+  times.push(at);
+  try {
+    return await councilRun(ctx, runId);
+  } catch (e) {
+    // a run that produced no forecast gives its slot back
+    const i = times.indexOf(at);
+    if (i >= 0) times.splice(i, 1);
+    throw e;
+  }
+}
+
+async function councilRun(ctx: CouncilContext, runId: string): Promise<CouncilResult> {
   const block = contextBlock(ctx);
   const snippets = config.contextDevKey ? await contextSnippets(`${ctx.eventTitle} ${ctx.contractLabel}`).catch(() => []) : [];
 

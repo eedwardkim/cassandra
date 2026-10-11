@@ -64,7 +64,7 @@ export async function forecastFor(symbol: string, report: BiasReport | null, opt
   }
   bus.emit({ type: "council.start", symbol, runId, cached: false });
   try {
-    const { forecast } = await runCouncil(ctx, runId);
+    const { forecast } = await runCouncil(ctx, runId, !!opts.force);
     saveForecast(forecast, key);
     bus.emit({ type: "council.final", symbol, runId, forecast });
     db.insert(agentRuns).values({ kind: "council", symbol, ts: Date.now(), status: "ok", detail: forecast.id }).run();
