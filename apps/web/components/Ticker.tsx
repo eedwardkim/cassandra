@@ -1,7 +1,7 @@
 "use client";
 import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
-import { blocked, pct, short, type StreamEvent } from "@/lib/api";
+import { blocked, marketLabel, pct, short, type StreamEvent } from "@/lib/api";
 import { useStream } from "./stream";
 
 function line(e: StreamEvent): { sym?: string; text: string; tone: string } | null {
@@ -24,10 +24,7 @@ function line(e: StreamEvent): { sym?: string; text: string; tone: string } | nu
   }
 }
 
-const market = (sym: string) => {
-  const m = sym.match(/^GEMI-([A-Z]+)\d+-HI([\d.]+)$/);
-  return m ? `${m[1]} ${m[2]}+` : sym.replace("GEMI-", "");
-};
+const market = marketLabel;
 const stamp = (e: StreamEvent): number | null => {
   if ("ts" in e) return e.ts;
   if ("report" in e) return e.report.ts;

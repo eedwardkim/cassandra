@@ -45,3 +45,9 @@ export const runError = (msg: string) =>
   /could not parse|No object generated/i.test(msg) ? "The forecast didn't finish: the model returned malformed output. Nothing new was sealed or traded."
   : /MAX_RUNS_PER_HOUR|forecast limit/i.test(msg) ? "Hourly forecast limit reached. Try again later."
   : msg;
+
+/** GEMI-SOL2610122100-HI112 → "SOL 112+" */
+export const marketLabel = (sym: string) => {
+  const m = sym.match(/^GEMI-([A-Z]+)\d+-HI([\d.]+)$/);
+  return m ? `${m[1]} ${m[2]}+` : sym.replace("GEMI-", "");
+};
