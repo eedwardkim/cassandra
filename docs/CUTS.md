@@ -28,3 +28,5 @@
 - **`/rpc` and `/api/faucet-local`** exist only on the local chain. The passthrough also refuses `eth_sendTransaction`,
   `eth_sign*` and `eth_accounts`, since anvil's dev accounts can send without a signature.
 
+- **MetaMask warns on the demo domain.** MetaMask (13.50) labels `cassandra-amber.vercel.app` "Malicious" when it asks to
+  add chain 31337. Signing still works after the warning. Not reported to MetaMask/Blockaid yet; a custom domain is the fix.
