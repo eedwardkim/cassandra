@@ -6,7 +6,7 @@ import { api, pct, usd, BIAS_NAMES, type MarketDetail, type Commit, type Trade, 
 import { useEvents, useStream } from "@/components/stream";
 import { PriceChart } from "@/components/PriceChart";
 import { CouncilChamber } from "@/components/Council";
-import { SealTimeline, WaxSeal } from "@/components/Seal";
+import { SealTimeline } from "@/components/Seal";
 import { Badge, Hash, Num, Panel, page } from "@/components/ui";
 
 export function Dossier({ symbol }: { symbol: string }) {
@@ -45,7 +45,7 @@ export function Dossier({ symbol }: { symbol: string }) {
 
   if (err) return <div className="mx-auto max-w-3xl px-6 py-24 text-center text-muted">{err === "unknown symbol" ? "This contract isn't tracked." : offline(err)} <Link className="text-oracle" href="/">Back to markets</Link></div>;
   const commit = d?.commits.find((c) => c.forecastId === d.forecast?.id) ?? d?.commits[0] ?? null;
-  const trade = d?.trades.find((t) => t.forecastId === d.forecast?.id) ?? d?.trades[0] ?? null;
+  const trade = (d?.forecast ? d.trades.find((t) => t.forecastId === d.forecast!.id) : d?.trades[0]) ?? null;
   const tradePolicy = policy ?? (trade ? { ok: trade.policyOk, reason: trade.policyReason, edgeBps: trade.edgeBps, notionalCents: trade.notionalCents } : null);
 
   // the side actually traded for this forecast wins over the side implied by today's moving price
@@ -104,7 +104,7 @@ export function Dossier({ symbol }: { symbol: string }) {
                 <Row k="Gap vs market">{gap != null ? `${gap > 0 ? "+" : ""}${gap.toFixed(1)} pts` : "—"}</Row>
                 <Row k="Edge after spread and fees">{tradePolicy ? `${tradePolicy.edgeBps} bps` : d?.bias ? `${d.bias.edgeBps} bps` : "—"}</Row>
                 <Row k="Order size">{usd(tradePolicy?.notionalCents)}</Row>
-                {!trade && <Row k="Your limits"><span className={tradePolicy ? (tradePolicy.ok ? "text-scored" : "text-refused") : "text-muted"}>{tradePolicy ? (tradePolicy.ok ? "Approved on-chain" : `Refused: ${tradePolicy.reason}`) : "Not checked yet"}</span></Row>}
+                {!trade && <Row k="Trade"><span className={tradePolicy ? (tradePolicy.ok ? "text-scored" : "text-refused") : "text-muted"}>{tradePolicy ? (tradePolicy.ok ? "Approved on-chain" : `Refused: ${tradePolicy.reason}`) : d?.forecast ? "None for this forecast" : "No forecast yet"}</span></Row>}
                 {trade?.orderId && <Row k="Fill">{trade.orderStatus ?? "sent"} · {trade.filledQuantity ?? "0"} of {trade.quantity} {trade.outcome.toUpperCase()} @ {pct(trade.priceBps, 0)}</Row>}
               </dl>
               {trade && <div className="mt-4 border-t border-hairline pt-4"><Steps t={trade} explorer={explorer} /></div>}
@@ -115,10 +115,7 @@ export function Dossier({ symbol }: { symbol: string }) {
           </Panel>
 
           <Panel title="On-chain record" right={commit?.replay ? <Badge kind="replay">replay</Badge> : caps?.chain.network === "local" ? <Badge kind="fixture">local chain</Badge> : null}>
-            <div className="flex gap-4 px-5 pb-4 pt-2">
-              <WaxSeal stampKey={commit?.commitTx ?? null} />
-              <div className="min-w-0 flex-1 text-sm"><SealTimeline commit={commit} explorer={explorer} /></div>
-            </div>
+            <div className="px-5 pb-4 pt-2 text-sm"><SealTimeline commit={commit} explorer={explorer} /></div>
             {commit && <div className="border-t border-hairline px-5 py-3 text-xs text-muted">Reasoning hash <Hash value={commit.reasoningHash} /></div>}
           </Panel>
         </div>

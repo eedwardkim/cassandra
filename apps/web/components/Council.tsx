@@ -1,4 +1,5 @@
 "use client";
+import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { pct, type Forecast } from "@/lib/api";
 
@@ -17,6 +18,7 @@ export function argumentOf(buf: string): string {
 const probOf = (buf: string) => { const m = buf.match(/"probability"\s*:\s*([0-9.]+)/); return m ? Number(m[1]) : null; };
 
 export function CouncilChamber({ forecast, live, running }: { forecast: Forecast | null; live: Record<string, string>; running: boolean }) {
+  const [open, setOpen] = useState<Record<string, boolean>>({});
   return (
     <div>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -27,15 +29,16 @@ export function CouncilChamber({ forecast, live, running }: { forecast: Forecast
           const prob = out?.probability ?? (buf != null ? probOf(buf) : null);
           const streaming = running && buf != null;
           return (
-            <motion.article key={p.key} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: [0, 6, 6, 0][i] }} transition={{ delay: i * 0.04 }}
-              className={`hair rounded-lg bg-surface/80 p-3 ${streaming ? "border-oracle/30" : ""}`}>
-              <header className="flex items-baseline justify-between">
-                <div><div className="display text-lg leading-none">{p.name}</div><div className="mt-0.5 text-[0.68rem] text-muted">{p.role}</div></div>
-                <div className="num text-lg text-oracle">{prob != null ? `${(prob * 100).toFixed(0)}%` : "—"}</div>
+            <motion.article key={p.key} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
+              className={`rounded-lg border bg-surface p-4 ${streaming ? "border-oracle/40" : "border-hairline"}`}>
+              <header className="flex items-start justify-between gap-3">
+                <div><div className="text-sm font-semibold leading-tight">{p.name}</div><div className="mt-0.5 text-[0.7rem] text-muted">{p.role}</div></div>
+                <div className={`num rounded-md px-2 py-0.5 text-sm font-semibold ${prob != null ? "bg-orange-50 text-oracle" : "text-muted"}`}>{prob != null ? `${(prob * 100).toFixed(0)}%` : "—"}</div>
               </header>
-              <p className={`mt-2 min-h-[5.5rem] text-[0.8rem] leading-relaxed text-ink/85 ${streaming ? "caret" : ""}`}>
+              <p className={`mt-2.5 text-[0.82rem] leading-relaxed text-ink/80 ${streaming ? "caret" : ""} ${!streaming && !open[p.key] ? "line-clamp-4" : ""}`}>
                 {text || <span className="text-muted">{running ? "thinking…" : "Not run yet."}</span>}
               </p>
+              {!streaming && text.length > 260 && <button onClick={() => setOpen((o) => ({ ...o, [p.key]: !o[p.key] }))} className="mt-1 text-xs font-medium text-muted hover:text-ink">{open[p.key] ? "Show less" : "Show more"}</button>}
               {out?.cruxes?.length ? <ul className="mt-2 space-y-0.5 text-[0.7rem] text-muted">{out.cruxes.map((c) => <li key={c}>— {c}</li>)}</ul> : null}
             </motion.article>
           );
@@ -49,15 +52,15 @@ export function CouncilChamber({ forecast, live, running }: { forecast: Forecast
 function Judge({ forecast, running }: { forecast: Forecast | null; running: boolean }) {
   const p = forecast ? forecast.pBps / 10000 : null;
   return (
-    <div className="mt-3 [perspective:1200px]">
+    <div className="mt-3">
       <AnimatePresence mode="wait">
         {forecast ? (
-          <motion.div key={forecast.id} initial={{ rotateX: -90, opacity: 0 }} animate={{ rotateX: 0, opacity: 1 }} transition={{ duration: 0.55, ease: [0.2, 0.8, 0.2, 1] }}
-            className="hair rounded-lg bg-surface-2 p-4" style={{ transformOrigin: "top" }}>
+          <motion.div key={forecast.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}
+            className="rounded-lg border border-hairline bg-surface-2/60 p-4">
             <div className="flex flex-wrap items-center gap-5">
               <Dial p={p!} lo={forecast.loBps / 10000} hi={forecast.hiBps / 10000} market={forecast.marketMidBps / 10000} />
               <div className="min-w-0 flex-1">
-                <div className="flex items-baseline gap-3"><span className="display text-2xl">The Judge</span><span className="label">80% interval {pct(forecast.loBps, 0)}–{pct(forecast.hiBps, 0)}</span></div>
+                <div className="flex items-baseline gap-3"><span className="text-base font-semibold">Judge</span><span className="label">80% interval {pct(forecast.loBps, 0)}–{pct(forecast.hiBps, 0)}</span></div>
                 <p className="mt-1 text-[0.82rem] leading-relaxed text-ink/85">{forecast.judge.rationale}</p>
                 {forecast.judge.biasHints.length > 0 && <div className="mt-2 flex flex-wrap gap-1.5">{forecast.judge.biasHints.map((b) => <span key={b} className="rounded-full border border-oracle/30 px-2 py-0.5 text-[0.68rem] text-oracle">{b}</span>)}</div>}
                 {forecast.judge.whatWouldChangeMyMind.length > 0 && <div className="mt-2 text-[0.72rem] text-muted"><span className="label mr-1">would change my mind</span>{forecast.judge.whatWouldChangeMyMind.join(" · ")}</div>}
@@ -65,7 +68,7 @@ function Judge({ forecast, running }: { forecast: Forecast | null; running: bool
             </div>
           </motion.div>
         ) : (
-          <motion.div key="wait" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, rotateX: 90 }} className="hair grid h-28 place-items-center rounded-lg bg-surface/50 text-sm text-muted">
+          <motion.div key="wait" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="hair grid h-28 place-items-center rounded-lg bg-surface/50 text-sm text-muted">
             {running ? "Trimmed mean of 4 forecasts, log-odds" : "No forecast yet for this contract"}
           </motion.div>
         )}

@@ -24,19 +24,40 @@ function line(e: StreamEvent): { sym?: string; text: string; tone: string } | nu
   }
 }
 
-export function Ticker() {
-  const { feed, connected } = useStream();
+const market = (sym: string) => {
+  const m = sym.match(/^GEMI-([A-Z]+)\d+-HI([\d.]+)$/);
+  return m ? `${m[1]} ${m[2]}+` : sym.replace("GEMI-", "");
+};
+const stamp = (e: StreamEvent): number | null => {
+  if ("ts" in e) return e.ts;
+  if ("report" in e) return e.report.ts;
+  if ("forecast" in e) return e.forecast.createdAt;
+  if ("trade" in e) return e.trade.createdAt;
+  if ("commit" in e) return e.commit.createdAt;
+  return null;
+};
+const time = (e: StreamEvent) => { const t = stamp(e); return t ? new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }) : ""; };
+
+export function Ticker({ seed = [] }: { seed?: StreamEvent[] }) {
+  const { feed: live, connected } = useStream();
+  const feed = live.some((e) => line(e)) ? live : seed;
   const rows = feed.map((e, i) => ({ e, l: line(e), k: `${feed.length - i}-${e.type}` })).filter((r) => r.l).slice(0, 18);
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between border-b border-hairline px-4 py-2.5"><span className="label">Wire</span><span className={`text-[0.66rem] ${connected ? "text-scored" : "text-muted"}`}>{connected ? "streaming" : "reconnecting"}</span></div>
-      <ol className="flex-1 space-y-px overflow-hidden px-2 py-2 text-xs">
-        {!rows.length && <li className="px-2 py-3 text-muted">Awaiting the first council, seal or trade.</li>}
+    <div className="flex flex-col">
+      <div className="flex items-center justify-between border-b border-hairline px-4 py-3">
+        <h2 className="text-sm font-semibold">Activity</h2>
+        <span className="flex items-center gap-1.5 text-xs text-muted"><span className={`h-1.5 w-1.5 rounded-full ${connected ? "bg-scored" : "bg-muted"}`} />{connected ? "Live" : "Reconnecting"}</span>
+      </div>
+      <ol className="max-h-[560px] divide-y divide-hairline overflow-hidden text-xs">
+        {!rows.length && <li className="px-4 py-6 text-center text-muted">No activity yet.</li>}
         <AnimatePresence initial={false}>
           {rows.map(({ e, l, k }) => (
-            <motion.li key={k} layout initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }} className="rounded px-2 py-1.5 hover:bg-black/[0.04]">
-              {l!.sym ? <Link href={`/m/${l!.sym}`} className="num block truncate text-[0.68rem] text-muted hover:text-ink">{l!.sym.replace("GEMI-", "")}</Link> : <span className="num block text-[0.68rem] text-muted">{e.type}</span>}
-              <span className={`${l!.tone} num`}>{l!.text}</span>
+            <motion.li key={k} layout initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex gap-3 px-4 py-2.5">
+              <span className="num w-10 shrink-0 text-muted">{time(e)}</span>
+              <span className="min-w-0 flex-1">
+                {l!.sym && <Link href={`/m/${l!.sym}`} className="num block truncate font-medium text-ink hover:text-oracle">{market(l!.sym)}</Link>}
+                <span className={`${l!.tone} num block truncate`}>{l!.text}</span>
+              </span>
             </motion.li>
           ))}
         </AnimatePresence>

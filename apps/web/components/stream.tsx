@@ -15,6 +15,7 @@ export function StreamProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     refreshCaps();
+    api<StreamEvent[]>("/api/events/recent").then((r) => setFeed((f) => (f.length ? f : r.filter((e) => e.type !== "council.delta" && e.type !== "tick" && e.type !== "block").reverse().slice(0, 40)))).catch(() => {});
     const es = new EventSource(`${ENGINE}/api/stream`);
     es.onopen = () => setConnected(true);
     es.onerror = () => setConnected(false);

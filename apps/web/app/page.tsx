@@ -1,8 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
-import { api, pct, BIAS_NAMES, type Ledger, type MarketSummary, offline } from "@/lib/api";
+import { api, pct, BIAS_NAMES, type Ledger, type MarketSummary, type StreamEvent, offline } from "@/lib/api";
 import { Ticker } from "@/components/Ticker";
 import { useEvents, useStream } from "@/components/stream";
 import { Badge, Num } from "@/components/ui";
@@ -14,6 +13,10 @@ const closesIn = (iso: string | null) => {
   return m < 60 ? `Closes in ${m}m` : m < 2880 ? `Closes in ${Math.round(m / 60)}h` : `Closes in ${Math.round(m / 1440)}d`;
 };
 const gapOf = (m: MarketSummary) => (m.councilBps != null && m.tick ? (m.councilBps - m.tick.midBps) / 100 : null);
+const strike = (label: string) => Number(label.replace(/[^0-9.]/g, "")) || 0;
+const asset = (e: string) => e.match(/^[A-Z]+/)?.[0] ?? e.slice(0, 3);
+
+interface Group { ticker: string; title: string; category: string; expiryDate: string | null; markets: MarketSummary[]; score: number }
 
 export default function Home() {
   const [markets, setMarkets] = useState<MarketSummary[] | null>(null);
@@ -35,81 +38,117 @@ export default function Home() {
     if (e.type === "index.update") setIndex(e.value);
   });
   const cats = useMemo(() => ["All", ...new Set((markets ?? []).map((m) => m.category))], [markets]);
-  const sorted = [...(markets ?? [])].filter((m) => cat === "All" || m.category === cat).sort((a, b) => (b.irrationality ?? 0) - (a.irrationality ?? 0));
-  const top = sorted[0];
+  const groups = useMemo(() => {
+    const by = new Map<string, Group>();
+    for (const m of markets ?? []) {
+      if (cat !== "All" && m.category !== cat) continue;
+      const g = by.get(m.eventTicker) ?? { ticker: m.eventTicker, title: m.title, category: m.category, expiryDate: m.expiryDate, markets: [], score: 0 };
+      g.markets.push(m);
+      g.score = Math.max(g.score, m.irrationality ?? 0, Math.abs(gapOf(m) ?? 0));
+      by.set(m.eventTicker, g);
+    }
+    for (const g of by.values()) g.markets.sort((a, b) => strike(a.label) - strike(b.label));
+    return [...by.values()].sort((a, b) => b.score - a.score);
+  }, [markets, cat]);
+  const top = useMemo(() => {
+    const withGap = (markets ?? []).filter((m) => gapOf(m) != null).sort((a, b) => Math.abs(gapOf(b)!) - Math.abs(gapOf(a)!));
+    return withGap[0] ?? [...(markets ?? [])].sort((a, b) => (b.irrationality ?? 0) - (a.irrationality ?? 0))[0];
+  }, [markets]);
   const brier = ledger?.onchain && ledger.onchain.count > 0 ? Number(ledger.onchain.meanBrierBps2) / 1e8 : null;
+  const seed = useMemo<StreamEvent[]>(() => (ledger?.commits ?? []).slice(0, 18).map((c) => ({ type: c.state === "scored" ? "seal.scored" : c.state === "revealed" ? "seal.revealed" : "seal.committed", commit: c })), [ledger]);
+  const fixture = caps && caps.gemini.mode !== "live";
 
   return (
-    <div className="mx-auto max-w-[1280px] px-4 pb-16 pt-10 sm:px-6">
-      <section className="grid gap-8 lg:grid-cols-[1fr_420px] lg:items-end">
-        <div>
-          <h1 className="display fluid-hero max-w-2xl">AI forecasts you can audit, on Gemini prediction markets.</h1>
-          <p className="mt-3 max-w-xl text-[0.95rem] leading-relaxed text-muted">Four AI forecasters debate each Gemini market. Their probability is sealed on-chain before the market resolves, then scored. The agent trades the gap only inside limits you set.</p>
-          <div className="mt-5 flex flex-wrap gap-2">
-            {top && <Link href={`/m/${top.symbol}`} className="rounded-lg bg-ink px-4 py-2.5 text-sm font-medium text-white hover:bg-ink/85">Open the most mispriced market</Link>}
-            <Link href="/ledger" className="rounded-lg border border-hairline bg-white px-4 py-2.5 text-sm font-medium hover:border-ink/30">See the track record</Link>
-          </div>
+    <div className="mx-auto max-w-[1280px] px-4 pb-16 pt-8 sm:px-6">
+      <section className="flex flex-wrap items-end justify-between gap-6 border-b border-hairline pb-6">
+        <div className="max-w-xl">
+          <h1 className="text-2xl font-semibold tracking-tight">Markets</h1>
+          <p className="mt-1.5 text-sm leading-relaxed text-muted">Four AI forecasters price each Gemini sandbox contract. The forecast is sealed on-chain before the market closes and scored when it resolves. The agent trades the gap only inside limits the owner signs.</p>
         </div>
-        <dl className="grid grid-cols-2 overflow-hidden rounded-xl border border-hairline bg-white">
-          <Stat label="Markets tracked" value={markets?.length ?? null} />
+        <dl className="flex flex-wrap gap-x-8 gap-y-3">
           <Stat label="Forecasts sealed" value={ledger?.counts.sealed ?? null} />
-          <Stat label="Market irrationality" value={index} fmt={(v) => `${v.toFixed(0)} / 100`} />
-          <Stat label="Mean Brier score" value={brier} fmt={(v) => v.toFixed(3)} hint={brier == null ? "after first resolution" : "lower is better"} />
+          <Stat label="Scored on-chain" value={ledger?.onchain?.count ?? ledger?.counts.scored ?? null} />
+          <Stat label="Mean Brier" value={brier} fmt={(v) => v.toFixed(3)} />
+          <Stat label="Market irrationality" value={index} fmt={(v) => v.toFixed(0)} suffix="/100" />
         </dl>
       </section>
 
-      <div className="mt-10 grid gap-6 lg:grid-cols-[1fr_320px]">
-        <section>
+      <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <section className="min-w-0">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div className="flex gap-1">
               {cats.map((c) => <button key={c} onClick={() => setCat(c)} className={`rounded-full px-3 py-1.5 text-sm font-medium capitalize ${cat === c ? "bg-ink text-white" : "text-muted hover:bg-surface-2 hover:text-ink"}`}>{c}</button>)}
             </div>
-            <span className="text-xs text-muted">Sorted by how mispriced the bias engine thinks they are{caps && caps.gemini.mode !== "live" ? " · " : ""}{caps && caps.gemini.mode !== "live" && <Badge kind="fixture">fixture prices</Badge>}</span>
+            <div className="flex items-center gap-2 text-xs text-muted">
+              {fixture && <Badge kind="fixture">fixture prices</Badge>}
+              {top && <Link href={`/m/${top.symbol}`} className="rounded-lg bg-ink px-3 py-2 text-xs font-medium text-white hover:bg-ink/85">Largest gap: {asset(top.eventTicker)} {top.label}</Link>}
+            </div>
           </div>
-          {markets === null && !err && <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{Array.from({ length: 6 }).map((_, i) => <div key={i} className="skeleton h-44 rounded-xl" />)}</div>}
+          {markets === null && !err && <div className="grid gap-4 xl:grid-cols-2">{Array.from({ length: 4 }).map((_, i) => <div key={i} className="skeleton h-64 rounded-xl" />)}</div>}
           {err && <div className="rounded-xl border border-hairline bg-white p-8 text-center text-sm text-muted">{offline(err)}</div>}
           {markets?.length === 0 && <div className="rounded-xl border border-hairline bg-white p-8 text-center text-sm text-muted">No markets tracked yet. The engine picks the most liquid sandbox markets on boot.</div>}
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {sorted.map((m, i) => <MarketCard key={m.symbol} m={m} i={i} />)}
+          <div className="grid items-start gap-4 xl:grid-cols-2">
+            {groups.map((g) => <EventCard key={g.ticker} g={g} />)}
           </div>
         </section>
         <aside className="h-fit overflow-hidden rounded-xl border border-hairline bg-white lg:sticky lg:top-20">
-          <div className="flex items-center justify-between px-4 pt-4 pb-2"><h2 className="text-[0.95rem] font-semibold">Live activity</h2><span className="flex items-center gap-1.5 text-xs text-muted"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-scored" />streaming</span></div>
-          <div className="h-[560px]"><Ticker /></div>
+          <Ticker seed={seed} />
         </aside>
       </div>
     </div>
   );
 }
 
-function Stat({ label, value, fmt = (v: number) => v.toFixed(0), hint }: { label: string; value: number | null; fmt?: (v: number) => string; hint?: string }) {
+function Stat({ label, value, fmt = (v: number) => v.toFixed(0), suffix }: { label: string; value: number | null; fmt?: (v: number) => string; suffix?: string }) {
   return (
-    <div className="border-hairline p-4 [&:nth-child(-n+2)]:border-b [&:nth-child(odd)]:border-r">
+    <div>
       <dt className="text-xs text-muted">{label}</dt>
-      <dd className="mt-1 text-2xl font-semibold tracking-tight"><Num value={value} format={fmt} /></dd>
-      {hint && <dd className="text-[0.7rem] text-muted">{hint}</dd>}
+      <dd className="mt-0.5 text-xl font-semibold tracking-tight"><Num value={value} format={fmt} />{suffix && value != null && <span className="ml-0.5 text-sm font-normal text-muted">{suffix}</span>}</dd>
     </div>
   );
 }
 
-function MarketCard({ m, i }: { m: MarketSummary; i: number }) {
-  const gap = gapOf(m);
-  const sig = m.topSignature;
+function EventCard({ g }: { g: Group }) {
+  const sig = g.markets.map((m) => m.topSignature).filter((s) => s != null).sort((a, b) => b.score - a.score)[0];
   return (
-    <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0, transition: { delay: Math.min(i, 12) * 0.03 } }}>
-      <Link href={`/m/${m.symbol}`} className="flex h-full flex-col rounded-xl border border-hairline bg-white p-4 transition-shadow hover:border-ink/20 hover:shadow-[0_2px_12px_rgba(16,24,40,0.06)]">
-        <div className="flex items-center justify-between text-xs text-muted"><span className="capitalize">{m.category}</span><span>{closesIn(m.expiryDate)}</span></div>
-        <div className="mt-2 line-clamp-2 text-[0.95rem] font-medium leading-snug">{m.title}</div>
-        <div className="text-sm text-muted">{m.label}</div>
-        <div className="mt-4 grid grid-cols-2 gap-2">
-          <div className="rounded-lg bg-surface-2 px-3 py-2"><div className="text-[0.7rem] text-muted">Market</div><div className="num text-lg font-semibold">{pct(m.tick?.midBps, 0)}</div></div>
-          <div className="rounded-lg bg-orange-50 px-3 py-2"><div className="text-[0.7rem] text-oracle/80">Cassandra</div><div className="num text-lg font-semibold text-oracle">{pct(m.councilBps, 0)}</div></div>
+    <article className="overflow-hidden rounded-xl border border-hairline bg-white">
+      <header className="flex items-start gap-3 px-4 pt-4 pb-3">
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-surface-2 text-[0.7rem] font-semibold">{asset(g.ticker)}</span>
+        <div className="min-w-0 flex-1">
+          <h2 className="truncate text-[0.95rem] font-semibold leading-tight">{g.title}</h2>
+          <div className="mt-0.5 flex gap-2 text-xs text-muted"><span className="capitalize">{g.category}</span><span>·</span><span>{closesIn(g.expiryDate)}</span><span>·</span><span>{g.markets.length} {g.markets.length === 1 ? "strike" : "strikes"}</span></div>
         </div>
-        <div className="mt-3 flex items-center justify-between text-xs">
-          <span className="truncate text-muted">{sig ? `${BIAS_NAMES[sig.kind]}${sig.magnitudeBps ? ` · ${(sig.magnitudeBps / 100).toFixed(1)} pts` : ""}` : "No bias detected"}</span>
-          {gap != null && Math.abs(gap) >= 0.5 && <span className={`num shrink-0 font-medium ${gap > 0 ? "text-scored" : "text-refused"}`}>{gap > 0 ? "+" : ""}{gap.toFixed(1)} pts</span>}
-        </div>
-      </Link>
-    </motion.div>
+      </header>
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-y border-hairline bg-surface-2/60 text-[0.7rem] text-muted">
+            <th className="py-1.5 pl-4 text-left font-medium">Strike</th>
+            <th className="py-1.5 text-left font-medium">Market</th>
+            <th className="py-1.5 text-right font-medium">Cassandra</th>
+            <th className="py-1.5 pr-4 text-right font-medium">Gap</th>
+          </tr>
+        </thead>
+        <tbody>
+          {g.markets.map((m) => {
+            const gap = gapOf(m);
+            const mid = m.tick?.midBps ?? null;
+            return (
+              <tr key={m.symbol} className="group border-b border-hairline last:border-0">
+                <td className="py-0 pl-4"><Link href={`/m/${m.symbol}`} className="block py-2.5 font-medium group-hover:text-oracle">{m.label.replace(/ or above$/, "+")}</Link></td>
+                <td className="w-[38%] py-2.5 pr-3">
+                  <Link href={`/m/${m.symbol}`} className="flex items-center gap-2">
+                    <span className="num w-9 shrink-0 font-semibold">{pct(mid, 0)}</span>
+                    <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-2"><span className="block h-full rounded-full bg-crowd/70" style={{ width: `${(mid ?? 0) / 100}%` }} /></span>
+                  </Link>
+                </td>
+                <td className="num py-2.5 text-right"><Link href={`/m/${m.symbol}`} className={m.councilBps != null ? "font-semibold text-oracle" : "text-muted/60"}>{m.councilBps != null ? pct(m.councilBps, 0) : "—"}</Link></td>
+                <td className="num py-2.5 pr-4 text-right"><Link href={`/m/${m.symbol}`} className={gap == null || Math.abs(gap) < 0.5 ? "text-muted/60" : gap > 0 ? "font-medium text-scored" : "font-medium text-refused"}>{gap == null ? "" : `${gap > 0 ? "+" : ""}${gap.toFixed(1)}`}</Link></td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      {sig && <footer className="border-t border-hairline px-4 py-2 text-xs text-muted">Flagged: <span className="text-ink">{BIAS_NAMES[sig.kind]}</span>{sig.magnitudeBps ? ` · ${(sig.magnitudeBps / 100).toFixed(1)} pts` : ""}</footer>}
+    </article>
   );
 }
