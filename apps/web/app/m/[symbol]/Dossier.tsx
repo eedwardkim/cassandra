@@ -39,7 +39,8 @@ export function Dossier({ symbol }: { symbol: string }) {
   });
   const run = async () => {
     setRunErr(null);
-    try { await api(`/api/run/${encodeURIComponent(symbol)}`, { method: "POST", body: "{}" }); setRunning(true); } catch (e) { setRunErr((e as Error).message); }
+    setRunning(true);
+    try { await api(`/api/run/${encodeURIComponent(symbol)}?force=1`, { method: "POST", body: "{}" }); } catch (e) { setRunning(false); setRunErr((e as Error).message); }
   };
 
   if (err) return <div className="mx-auto max-w-3xl px-6 py-24 text-center text-muted">{err === "unknown symbol" ? "This contract isn't tracked." : offline(err)} <Link className="text-oracle" href="/">Back to markets</Link></div>;
