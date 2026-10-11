@@ -1,0 +1,18 @@
+{
+  "name": "cassandra",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@9.15.9",
+  "engines": { "node": ">=22.4.0" },
+  "scripts": {
+    "dev": "pnpm --parallel --filter @cassandra/engine --filter @cassandra/web dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm --filter @cassandra/shared test && cd packages/contracts && forge test",
+    "smoke": "pnpm --filter @cassandra/engine smoke",
+    "capture": "pnpm --filter @cassandra/engine capture",
+    "demo:replay": "pnpm --filter @cassandra/engine demo:replay",
+    "deploy:testnet": "pnpm --filter @cassandra/engine deploy:testnet",
+    "deploy:local": "pnpm --filter @cassandra/engine deploy:local"
+  }
+}
