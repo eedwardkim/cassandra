@@ -160,7 +160,7 @@ contract CassandraTest {
         policy.authorizeTrade(key, 100, 500, 3, bytes32(0));
     }
 
-    function test_transferOwnershipMovesTheLeash() public {
+    function test_transferOwnershipMovesTheLimits() public {
         vm.prank(owner);
         policy.transferOwnership(address(0xCAFE));
         vm.prank(owner);

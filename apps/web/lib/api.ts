@@ -20,6 +20,15 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   return body as T;
 }
 
+const REASONS: Record<string, string> = {
+  "notional exceeds max per trade": "over the per-trade limit",
+  "daily notional limit reached": "over the daily limit",
+  "edge below policy minimum": "edge below the minimum",
+  "agent paused by owner": "agent paused by the owner",
+  "category not allowed": "category not allowed",
+  "no policy set for agent": "no limits set",
+};
+export const blocked = (reason: string | null | undefined) => `Blocked by your limits: ${REASONS[reason ?? ""] ?? reason ?? "rejected"}. No order sent to Gemini.`;
 export const offline = (err: string) => (process.env.NODE_ENV === "development" ? `Engine offline (${err}). Start it with pnpm dev.` : "Engine offline");
 export const pct = (bps: number | null | undefined, d = 1) => (bps == null ? "—" : `${(bps / 100).toFixed(d)}%`);
 export const short = (h?: string | null) => (h ? `${h.slice(0, 6)}…${h.slice(-4)}` : "—");

@@ -22,7 +22,7 @@ price, and a policy-bound agent wallet trades the gap in the Gemini prediction-m
    pools them in logit space. The whole debate is hashed into the on-chain commitment.
 3. **Proves calibration.** Commit, reveal, then a Brier score on resolution. Anyone can check she was right before it
    was obvious.
-4. **Stays on a leash.** The agent cannot place a trade outside these limits. Every order needs an on-chain approval
+4. **Trades only inside the owner's spending limits.** The agent cannot place a trade outside these limits. Every order needs an on-chain approval
    first; the contract reverts out-of-policy trades before anything reaches Gemini. The owner's browser wallet signs
    the limits on `/policy`. The Gemini sandbox key lives only in the order gateway; exchange-side enforcement (Gemini
    checking the policy contract itself) is next.
@@ -76,7 +76,7 @@ cp .env.example .env           # Gemini sandbox keys, ANTHROPIC_API_KEY, OWNER/A
 anvil &                        # only for CHAIN_NETWORK=local
 pnpm deploy:local              # or: pnpm deploy:testnet (needs tBNB on the owner wallet)
 pnpm dev                       # web :3000, engine :4000
-pnpm smoke --open-leash        # discovery, bias, council, seal, leash refusal, authorize → order → settle
+pnpm smoke --open-limits       # discovery, bias, council, seal, blocked trade, authorize → order → settle
 pnpm demo:replay               # score settled sandbox markets on-chain for the Ledger
 ```
 
@@ -96,7 +96,7 @@ Deploy: `fly deploy` (engine + anvil, state on a volume; see `fly.toml`) and `ve
 Real Gemini sandbox orders: `145853902277229792` (buy YES, filled) and `145853902277229793` (buy NO, filled) through
 `placeIoc` at ask + 1 tick; `145853902277221008` placed by the executor (IOC, cancelled unfilled, stale quote).
 
-Leash proof (`pnpm smoke --open-leash`, local chain): max per trade $0.00 → refused, Gemini order count unchanged.
+Spending-limit proof (`pnpm smoke --open-limits`, local chain): max per trade $0.00 → refused, Gemini order count unchanged.
 Inside the limits: `authorizeTrade`
 `0x0cc6c237247946ed986a6f197e71c20489af76df2c3de969f042dfa494976674` → sandbox order `145853902277242812` (filled
 10 YES @ 53¢) → `settleTrade` `0xa62a7bbc7741f6120df3b2e47e17dd0332925613b50c89d987e5c6b50af05494`.

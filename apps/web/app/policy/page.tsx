@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { api, offline, pct, short, usd, type Policy, type PolicyState, type Trade } from "@/lib/api";
+import { api, blocked, offline, pct, short, usd, type Policy, type PolicyState, type Trade } from "@/lib/api";
 import { connectWallet, ownerWrite, sameAddress, useWallet } from "@/lib/wallet";
 import { useEvents, useStream } from "@/components/stream";
 import { Badge, Hash, Panel, page } from "@/components/ui";
@@ -39,13 +39,13 @@ export default function PolicyPage() {
 
   return (
     <motion.div {...page} className="mx-auto max-w-[1300px] px-4 pb-12 pt-6 sm:px-6">
-      <h1 className="display fluid-hero">The <span className="italic text-oracle">Leash</span></h1>
-      <p className="mt-2 max-w-2xl text-sm text-muted">The agent cannot place a trade outside these limits. Every order needs an on-chain approval first; the contract reverts out-of-policy trades before anything reaches Gemini.</p>
+      <h1 className="text-2xl font-semibold tracking-tight">Spending limits</h1>
+      <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-muted">The agent cannot place a trade outside these limits. Every order needs an on-chain approval first; the contract rejects any trade that breaks a limit before anything reaches Gemini. Only the owner wallet can change them.</p>
       {err && <div className="mt-4 text-sm text-refused">{offline(err)}</div>}
       {s && !s.live && <div className="mt-4"><Badge kind="fixture">chain dry-run: policy is not on-chain</Badge></div>}
 
       <div className="mt-6 grid gap-4 lg:grid-cols-[420px_1fr]">
-        <Panel title="Owner controls" right={s?.address && <span className="text-xs text-muted">AgentPolicy <Hash value={s.address} /></span>}>
+        <Panel title="Limits" right={s?.address && <span className="text-xs text-muted">Contract <Hash value={s.address} /></span>}>
           {!draft ? <div className="space-y-3 p-4">{[0, 1, 2].map((i) => <div key={i} className="skeleton h-10 rounded" />)}</div> : (
             <div className="space-y-5 p-4">
               <div className="flex items-center justify-between gap-3 rounded-lg bg-surface-2 px-3 py-2.5 text-sm">
@@ -56,8 +56,8 @@ export default function PolicyPage() {
               {locked && s?.owner && <p className="text-xs text-muted">Only the owner {short(s.owner)} can change these limits.</p>}
               <fieldset disabled={locked} className="space-y-5 disabled:opacity-60">
               <Slider label="Max per trade" value={draft.maxNotionalPerTrade} min={0} max={5000} step={50} fmt={usd} onChange={(v) => setDraft({ ...draft, maxNotionalPerTrade: v })} />
-              <Slider label="Max daily" value={draft.maxDailyNotional} min={0} max={50000} step={500} fmt={usd} onChange={(v) => setDraft({ ...draft, maxDailyNotional: v })} />
-              <Slider label="Min edge" value={draft.minEdgeBps} min={0} max={3000} step={25} fmt={(v) => `${v} bps`} onChange={(v) => setDraft({ ...draft, minEdgeBps: v })} />
+              <Slider label="Max per day" value={draft.maxDailyNotional} min={0} max={50000} step={500} fmt={usd} onChange={(v) => setDraft({ ...draft, maxDailyNotional: v })} />
+              <Slider label="Minimum edge after fees" value={draft.minEdgeBps} min={0} max={3000} step={25} fmt={(v) => `${(v / 100).toFixed(2)} pts`} onChange={(v) => setDraft({ ...draft, minEdgeBps: v })} />
               <div>
                 <div className="label mb-2">Allowed categories</div>
                 <div className="flex flex-wrap gap-1.5">
@@ -74,8 +74,8 @@ export default function PolicyPage() {
                 </button>
               </label>
               </fieldset>
-              <button onClick={submit} disabled={locked || !dirty || tx.state === "pending" || !s?.live} className="w-full rounded-md border border-oracle/60 bg-oracle/10 py-2 text-sm text-oracle hover:bg-oracle/20 disabled:opacity-40">
-                {tx.state === "pending" ? "Confirm in your wallet…" : "Sign setPolicy with your wallet"}
+              <button onClick={submit} disabled={locked || !dirty || tx.state === "pending" || !s?.live} className="w-full rounded-lg bg-ink py-2.5 text-sm font-medium text-white hover:bg-ink/85 disabled:opacity-40">
+                {tx.state === "pending" ? "Confirm in your wallet…" : "Save limits (sign in wallet)"}
               </button>
               {tx.state === "confirmed" && <div className="text-xs text-scored">Confirmed <Hash value={tx.hash} href={explorer && tx.hash ? explorer + tx.hash : null} /></div>}
               {tx.state === "failed" && <div className="text-xs text-refused">{tx.error}</div>}
@@ -84,16 +84,16 @@ export default function PolicyPage() {
         </Panel>
 
         <div className="space-y-4">
-          <Panel title="Daily exposure (UTC)">
+          <Panel title="Spent today (UTC)">
             <div className="p-4">
               <div className="flex items-baseline justify-between text-sm"><span className="num text-2xl">{usd(spent)}</span><span className="num text-muted">of {usd(maxDaily)}</span></div>
               <div className="mt-2 h-1.5 overflow-hidden rounded bg-black/5"><motion.div className={`h-full ${spent > maxDaily * 0.8 ? "bg-refused" : "bg-oracle"}`} initial={{ width: 0 }} animate={{ width: `${maxDaily ? Math.min(100, (spent / maxDaily) * 100) : 0}%` }} /></div>
             </div>
           </Panel>
-          <Panel title="Audit: chain approval → Gemini order → fill record">
+          <Panel title="Trade history">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[720px] text-sm">
-                <thead><tr className="text-left">{["Time", "Market", "Order", "Edge", "Notional", "Chain approved", "Gemini order id", "Fill recorded"].map((h) => <th key={h} className="label px-4 py-2 font-normal">{h}</th>)}</tr></thead>
+                <thead><tr className="text-left">{["Time", "Market", "Order", "Edge", "Size", "Approved on-chain", "Gemini order", "Fill recorded"].map((h) => <th key={h} className="label px-4 py-2 font-normal">{h}</th>)}</tr></thead>
                 <tbody className="divide-y divide-hairline">
                   {s && s.trades.length === 0 && <tr><td colSpan={8} className="px-4 py-6 text-center text-muted">No trade attempts yet</td></tr>}
                   {s?.trades.map((t) => <Row key={t.id} t={t} explorer={explorer} />)}
@@ -116,9 +116,9 @@ function Row({ t, explorer }: { t: Trade; explorer: string | null }) {
       <td className="num px-4 py-2 text-xs">{t.quantity} {t.outcome.toUpperCase()} @ {pct(t.priceBps, 0)}</td>
       <td className="num px-4 py-2 text-xs">{t.edgeBps} bps</td>
       <td className="num px-4 py-2 text-xs">{usd(t.notionalCents)}</td>
-      <td className="px-4 py-2 text-xs">{t.authorizeTx ? <Hash value={t.authorizeTx} href={explorer ? explorer + t.authorizeTx : null} /> : t.state === "refused" ? <span className="text-refused">refused</span> : "—"}</td>
+      <td className="px-4 py-2 text-xs">{t.authorizeTx ? <Hash value={t.authorizeTx} href={explorer ? explorer + t.authorizeTx : null} /> : t.state === "refused" ? <span className="text-refused">blocked</span> : "—"}</td>
       <td className="num px-4 py-2 text-xs">{t.orderId ?? "—"}{t.orderStatus && <span className="ml-1 text-muted">{t.orderStatus}</span>}</td>
-      <td className="px-4 py-2 text-xs">{t.state === "refused" ? <span className="text-refused">Chain refused: {t.policyReason}. No order sent.</span> : t.state === "failed" && !t.recordTx ? <span className="text-refused">{t.error}</span> : t.recordTx ? <Hash value={t.recordTx} href={explorer ? explorer + t.recordTx : null} /> : <span className="text-muted">{t.state}</span>}</td>
+      <td className="px-4 py-2 text-xs">{t.state === "refused" ? <span className="text-refused">{blocked(t.policyReason)}</span> : t.state === "failed" && !t.recordTx ? <span className="text-refused">{t.error}</span> : t.recordTx ? <Hash value={t.recordTx} href={explorer ? explorer + t.recordTx : null} /> : <span className="text-muted">{t.state}</span>}</td>
     </tr>
   );
 }

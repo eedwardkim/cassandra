@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-/// @title AgentPolicy: the human principal's on-chain leash for a trading agent.
+/// @title AgentPolicy: on-chain spending limits a human owner sets for a trading agent.
 contract AgentPolicy {
     struct Policy {
         uint128 maxNotionalPerTrade; // USD cents

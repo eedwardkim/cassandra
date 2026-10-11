@@ -1,7 +1,7 @@
 "use client";
 import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
-import { pct, short, type StreamEvent } from "@/lib/api";
+import { blocked, pct, short, type StreamEvent } from "@/lib/api";
 import { useStream } from "./stream";
 
 function line(e: StreamEvent): { sym?: string; text: string; tone: string } | null {
@@ -12,12 +12,12 @@ function line(e: StreamEvent): { sym?: string; text: string; tone: string } | nu
     case "seal.committed": return { sym: e.commit.symbol, text: `sealed ${short(e.commit.commitTx)}`, tone: "text-oracle" };
     case "seal.revealed": return { sym: e.commit.symbol, text: `revealed ${pct(e.commit.pBps)}`, tone: "text-oracle" };
     case "seal.scored": return { sym: e.commit.symbol, text: `scored Brier ${e.commit.brierBps2 != null ? (e.commit.brierBps2 / 1e8).toFixed(3) : "—"}`, tone: "text-scored" };
-    case "policy.checked": return { sym: e.symbol, text: e.ok ? `policy ok, edge ${e.edgeBps} bps` : `policy: ${e.reason}`, tone: e.ok ? "text-scored" : "text-refused" };
+    case "policy.checked": return { sym: e.symbol, text: e.ok ? `within limits, edge ${e.edgeBps} bps` : blocked(e.reason), tone: e.ok ? "text-scored" : "text-refused" };
     case "trade.placed": return { sym: e.trade.symbol, text: `order ${e.trade.orderId} ${e.trade.orderStatus ?? ""}`, tone: "text-crowd" };
-    case "trade.authorized": return { sym: e.trade.symbol, text: `chain approved ${short(e.trade.authorizeTx)}`, tone: "text-scored" };
+    case "trade.authorized": return { sym: e.trade.symbol, text: `approved on-chain ${short(e.trade.authorizeTx)}`, tone: "text-scored" };
     case "trade.settled": return { sym: e.trade.symbol, text: `fill recorded ${short(e.trade.recordTx)}`, tone: "text-oracle" };
-    case "trade.refused": return { sym: e.trade.symbol, text: e.trade.orderId ? `order failed: ${e.trade.error ?? "—"}` : `chain refused: ${e.trade.policyReason ?? "—"}. No order sent.`, tone: "text-refused" };
-    case "policy.updated": return { text: `policy set ${short(e.txHash)}`, tone: "text-oracle" };
+    case "trade.refused": return { sym: e.trade.symbol, text: e.trade.orderId ? `order failed: ${e.trade.error ?? "—"}` : blocked(e.trade.policyReason), tone: "text-refused" };
+    case "policy.updated": return { text: `limits updated ${short(e.txHash)}`, tone: "text-oracle" };
     case "bias.update": return e.report.irrationality >= 35 ? { sym: e.report.symbol, text: `irrationality ${e.report.irrationality.toFixed(0)}`, tone: "text-ink" } : null;
     case "log": return e.level === "error" ? { text: e.message.slice(0, 80), tone: "text-refused" } : null;
     default: return null;

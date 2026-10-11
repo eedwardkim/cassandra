@@ -1,18 +1,17 @@
-# Demo script (≈115 s, one take)
+# Demo script (about 2 minutes, one take)
 
 **Before recording**
-1. `curl -s $ENGINE/api/capabilities` shows gemini `live`, llm `live`, chain `live`, `demoMode: true`.
-2. `curl -s $ENGINE/api/markets | jq length` returns 24.
+1. `curl -s $ENGINE/api/capabilities` shows gemini `live`, llm `live`, chain `live`.
+2. `curl -s $ENGINE/api/markets | jq length` returns at least 20 and most have a `tick`.
 3. `curl -s $ENGINE/api/ledger | jq .counts` shows `scored ≥ 3`; if not, run `pnpm demo:replay` after a tracked market expires.
-4. Pick the top card under "Most irrational right now" on `/`. Click **Run council now** on its Dossier once so the cache is warm.
-5. Open `/policy` in a second tab, max per trade at $25.00.
+4. Open `/policy` in a second tab with the owner wallet connected; max per trade at $25.00.
 
 | Time | Click | Line |
 | --- | --- | --- |
-| 0:00–0:15 | `/`: gauge settles; hover two nodes | "Every dot is a live Gemini prediction market. Color is how irrational its price is right now." |
-| 0:15–0:45 | Click the hottest node, **Run council now**; personas stream, the Judge card flips | "Market says N%. Four forecasters argue; the Judge lands at M% and names the bias." Read the top Bias Spectrometer row. |
-| 0:45–1:05 | Wax seal stamps; point at the Sealed tx hash and block | "Sealed on-chain before the world finds out. Cassandra can't rewrite her forecast later." |
-| 1:05–1:25 | Trade card: Chain approved → Order sent to Gemini → Fill recorded. `/policy`: **Connect wallet** (owner), drag **Max per trade** down, sign in the wallet; the next tick shows "Chain refused: notional exceeds max per trade. No order sent." | "The agent trades inside limits the human set on-chain. Tighten the leash, and the chain refuses the trade before it reaches Gemini." |
+| 0:00–0:15 | `/`: point at one event card, market % next to Cassandra % for each strike | "These are Gemini prediction markets. For each one, Cassandra puts her own probability next to the market's." |
+| 0:15–0:45 | Click **Largest gap**, then **Run a new forecast**; the four forecasters stream, the Judge lands | "Market says N%. Four forecasters argue; the Judge lands at M% and names the bias." Read the top row of "Why the price may be off". |
+| 0:45–1:05 | On-chain record: point at the Sealed tx hash and block | "Sealed on-chain before the world finds out. Cassandra can't rewrite her forecast later." |
+| 1:05–1:25 | Trade card: Approved on-chain → Order sent to Gemini → Fill recorded. `/policy`: drag **Max per trade** down, **Save limits**, sign in the wallet; the next forecast shows "Blocked by your limits: over the per-trade limit. No order sent to Gemini." | "The agent can only trade inside spending limits the owner signs on-chain. Lower the limit, and the chain blocks the trade before it reaches Gemini." |
 | 1:25–1:50 | `/ledger`: Brier, replay rows, **verify** on a revealed row | "Resolved markets score her. Anyone can recompute the hash and see she was right before it was obvious." |
 | 1:50–2:00 | README "What we build next" | "Next: Gemini settlement as the resolver, staked forecaster reputation, an open registry." |
 

@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { api, pct, usd, BIAS_NAMES, type MarketDetail, type Commit, type Trade, offline } from "@/lib/api";
+import { api, blocked, pct, usd, BIAS_NAMES, type MarketDetail, type Commit, type Trade, offline } from "@/lib/api";
 import { useEvents, useStream } from "@/components/stream";
 import { PriceChart } from "@/components/PriceChart";
 import { CouncilChamber } from "@/components/Council";
@@ -104,7 +104,7 @@ export function Dossier({ symbol }: { symbol: string }) {
                 <Row k="Gap vs market">{gap != null ? `${gap > 0 ? "+" : ""}${gap.toFixed(1)} pts` : "—"}</Row>
                 <Row k="Edge after spread and fees">{tradePolicy ? `${tradePolicy.edgeBps} bps` : d?.bias ? `${d.bias.edgeBps} bps` : "—"}</Row>
                 <Row k="Order size">{usd(tradePolicy?.notionalCents)}</Row>
-                {!trade && <Row k="Trade"><span className={tradePolicy ? (tradePolicy.ok ? "text-scored" : "text-refused") : "text-muted"}>{tradePolicy ? (tradePolicy.ok ? "Approved on-chain" : `Refused: ${tradePolicy.reason}`) : d?.forecast ? "None for this forecast" : "No forecast yet"}</span></Row>}
+                {!trade && <Row k="Trade"><span className={tradePolicy ? (tradePolicy.ok ? "text-scored" : "text-refused") : "text-muted"}>{tradePolicy ? (tradePolicy.ok ? "Approved on-chain" : blocked(tradePolicy.reason)) : d?.forecast ? "None for this forecast" : "No forecast yet"}</span></Row>}
                 {trade?.orderId && <Row k="Fill">{trade.orderStatus ?? "sent"} · {trade.filledQuantity ?? "0"} of {trade.quantity} {trade.outcome.toUpperCase()} @ {pct(trade.priceBps, 0)}</Row>}
               </dl>
               {trade && <div className="mt-4 border-t border-hairline pt-4"><Steps t={trade} explorer={explorer} /></div>}
@@ -125,9 +125,9 @@ export function Dossier({ symbol }: { symbol: string }) {
 }
 
 function Steps({ t, explorer }: { t: Trade; explorer: string | null }) {
-  if (t.state === "refused") return <p className="text-sm font-medium text-refused">Chain refused: {t.policyReason}. No order sent.</p>;
+  if (t.state === "refused") return <p className="text-sm font-medium text-refused">{blocked(t.policyReason)}</p>;
   const link = (h: string | null) => (h ? <Hash value={h} href={explorer ? `${explorer}${h}` : null} /> : null);
-  const steps: [string, React.ReactNode][] = [["Chain approved", link(t.authorizeTx)], ["Order sent to Gemini", t.orderId ? <span className="mono text-xs">{t.orderId}</span> : null], ["Fill recorded", link(t.recordTx)]];
+  const steps: [string, React.ReactNode][] = [["Approved on-chain", link(t.authorizeTx)], ["Order sent to Gemini", t.orderId ? <span className="mono text-xs">{t.orderId}</span> : null], ["Fill recorded", link(t.recordTx)]];
   return (
     <ol className="space-y-2 text-sm">
       {steps.map(([k, v], i) => (

@@ -22,7 +22,7 @@ flowchart LR
 | Path | What it is |
 | --- | --- |
 | `apps/engine` | Fastify on Node 22. Ingest, bias, council, executor, chain client, REST + SSE on :4000 |
-| `apps/web` | Next.js App Router. Field `/`, Dossier `/m/[symbol]`, Ledger `/ledger`, Leash `/policy` on :3000 |
+| `apps/web` | Next.js App Router. Field `/`, Dossier `/m/[symbol]`, Ledger `/ledger`, Spending limits `/policy` on :3000 |
 | `packages/shared` | zod schemas, the Bias Spectrometer (pure functions + vitest), commitment hashing, contract ABIs |
 | `packages/contracts` | Foundry: `CalibrationLedger.sol`, `AgentPolicy.sol`, `Deploy.s.sol`, forge tests |
 | `fixtures/gemini` | Real sandbox responses captured by `pnpm capture`, served only when `DRY_RUN_GEMINI=true` |
@@ -44,7 +44,7 @@ flowchart LR
 6. **Trade**: IOC limit order in the Gemini sandbox at best ask + 1 tick. The attempt row is written *before*
    `placeOrder`; mutations are never retried; status is reconciled from `getOrderHistory`.
 7. **Authorize, order, settle**: the agent calls `authorizeTrade(marketKey, notional, edgeBps, category, keccak256(clientOrderId))`; a revert stores the trade as refused and no order is sent. `gateway.placeAuthorized(txHash)` re-reads `TradeAuthorized` from the receipt, checks market, notional and clientOrderId against the stored row (unique `onchain_trade_id`), and only then places the IOC order with that clientOrderId. `settleTrade(tradeId, keccak256(orderId), filledNotional)` refunds the unfilled part of the reservation and emits `TradeRecorded`. The
-   contract re-checks policy and reverts `PolicyViolation(reason)` if the leash was tightened in between.
+   contract re-checks policy and reverts `PolicyViolation(reason)` if the owner tightened the limits in between.
 8. **Resolve** every 10 min: settled Gemini contracts → owner calls `resolve(marketKey, outcomeYes)` → `Scored` events.
 
 Every chain write is stored `pending → confirmed | failed` in `chain_txs`; on boot pending rows are reconciled by
