@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray } from "drizzle-orm";
+import { and, desc, eq, gte, lt } from "drizzle-orm";
 import type { BiasReport, Commit, Forecast, Tick, Trade, Category } from "@cassandra/shared";
 import { CATEGORY_BITS } from "@cassandra/shared";
 import { db, schema } from "./db/index.js";
@@ -59,9 +59,18 @@ export const contractOf = (symbol: string) => db.select().from(contracts).where(
 export const siblingsOf = (eventTicker: string) => db.select().from(contracts).where(eq(contracts.eventTicker, eventTicker)).all();
 export const latestTicks = (symbols: string[]) => {
   const out = new Map<string, Tick>();
-  if (!symbols.length) return out;
-  for (const r of db.select().from(ticks).where(and(inArray(ticks.symbol, symbols), gte(ticks.ts, Date.now() - 6 * 3600_000))).orderBy(ticks.ts).all()) out.set(r.symbol, toTick(r));
+  const cut = Date.now() - 6 * 3600_000;
+  for (const s of new Set(symbols)) {
+    const r = db.select().from(ticks).where(and(eq(ticks.symbol, s), gte(ticks.ts, cut))).orderBy(desc(ticks.ts)).limit(1).get();
+    if (r) out.set(s, toTick(r));
+  }
   return out;
 };
+/** Quotes arrive every 5 s for ~24 contracts; keep two days of ticks and bias reports. */
+export function prune(keepMs = 48 * 3600_000) {
+  const cut = Date.now() - keepMs;
+  db.delete(ticks).where(lt(ticks.ts, cut)).run();
+  db.delete(biasReports).where(lt(biasReports.ts, cut)).run();
+}
 export const indexSeries = (sinceMs = 24 * 3600_000) =>
   db.select().from(indexHistory).where(gte(indexHistory.ts, Date.now() - sinceMs)).orderBy(indexHistory.ts).all();

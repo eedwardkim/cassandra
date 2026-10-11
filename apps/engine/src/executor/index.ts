@@ -115,7 +115,8 @@ export async function tradeGap(f: Forecast, report: BiasReport) {
   const open = already.find((t) => t.state !== "refused");
   if (open) return toTrade(open);
   const c = contractOf(f.symbol)!;
-  const t = latestTicks([f.symbol]).get(f.symbol);
+  // price off the book as it is now, not the last 5 s poll: thin sandbox books move between polls
+  const t = (await gemini.quote(f.symbol).catch(() => null)) ?? latestTicks([f.symbol]).get(f.symbol);
   if (!t) throw new Error("no fresh quote");
   const outcome: "yes" | "no" = f.pBps >= t.midBps ? "yes" : "no";
   const bestAsk = outcome === "yes" ? t.askBps : t.noAskBps;

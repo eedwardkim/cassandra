@@ -6,7 +6,7 @@ import { CATEGORY_BITS, Policy, type Capabilities } from "@cassandra/shared";
 import { config } from "./config.js";
 import { bus, log } from "./bus.js";
 import { db, schema } from "./db/index.js";
-import { chainLive, chain, deployment, network, blockNumber, explorerTx, agentAccount } from "./chain/index.js";
+import { chainLive, chain, deployment, network, blockNumber, explorerTx, agentAccount, publicClient } from "./chain/index.js";
 import * as ops from "./chain/ops.js";
 import { llmLive } from "./council/index.js";
 import { geminiSource } from "./gemini/index.js";
@@ -22,7 +22,7 @@ export async function capabilities(): Promise<Capabilities> {
   return {
     gemini: { mode: geminiSource === "live" ? "live" : "fixture", priceFeed: "rest-orderbook-5s", orders: geminiSource === "live" ? "sandbox" : "dry-run", events: lastDiscovery.events },
     llm: { mode: llmLive ? "live" : "dry-run", model: config.llm.model },
-    chain: { mode: chainLive ? "live" : "dry-run", network, chainId: chain.id, block: latestBlock, ledger: deployment?.ledger ?? null, policy: deployment?.policy ?? null, agent: agentAccount?.address ?? null, owner: policyOwnerAddr ?? (chainLive ? (policyOwnerAddr = await ops.policyOwner().catch(() => null)) : null) },
+    chain: { mode: chainLive ? "live" : "dry-run", network, chainId: chain.id, block: latestBlock, ledger: deployment?.ledger ?? null, policy: deployment?.policy ?? null, agent: agentAccount?.address ?? null, owner: chainLive ? await ownerOf() : null },
     contextDev: !!config.contextDevKey, demoMode: config.demo,
   };
 }
@@ -40,7 +40,12 @@ function marketSummary(symbol: string) {
   };
 }
 
-let policyOwnerAddr: string | null = null;
+let ownerCache: { v: string | null; at: number } = { v: null, at: 0 };
+/** Re-read at most every 30 s so a transferOwnership shows up without a restart. */
+async function ownerOf() {
+  if (Date.now() - ownerCache.at > 30_000) ownerCache = { v: await ops.policyOwner().catch(() => ownerCache.v), at: Date.now() };
+  return ownerCache.v;
+}
 const forcedRuns = new Map<string, number>();
 export async function buildServer() {
   const app = Fastify({ logger: false, trustProxy: true });
@@ -55,7 +60,7 @@ export async function buildServer() {
     return {
       ...marketSummary(c.symbol), description: eventOf(c.eventTicker)?.description ?? null,
       ticks: ticksFor(c.symbol), bias: latestBias(c.symbol), forecast: latestForecast(c.symbol),
-      commits: commitsFor(c.symbol).map(toCommit), trades: tradesFor(c.symbol).map(toTrade),
+      commits: commitsFor(c.symbol).filter((r) => r.network === network).map(toCommit), trades: tradesFor(c.symbol).map(toTrade),
     };
   });
   app.get<{ Params: { id: string } }>("/api/forecasts/:id", async (req, reply) => {
@@ -69,7 +74,7 @@ export async function buildServer() {
     return { value: series.at(-1)?.value ?? null, series: series.map((s) => ({ ts: s.ts, value: s.value })) };
   });
   app.get("/api/ledger", async () => {
-    const rows = commitsFor().map(toCommit);
+    const rows = commitsFor().filter((r) => r.network === network).map(toCommit);
     const cal = chainLive ? await ops.calibration().catch(() => null) : null;
     return {
       network, chainId: chain.id, ledger: deployment?.ledger ?? null, explorer: network === "local" ? null : "https://testnet.bscscan.com/tx/",
@@ -82,7 +87,7 @@ export async function buildServer() {
     if (!chainLive) return { live: false, policy: null, trades: tradesFor().map(toTrade), categories: CATEGORY_BITS };
     const p = await ops.getPolicy();
     setPolicyMinEdge(p.minEdgeBps);
-    return { live: true, policy: p, agent: agentAccount?.address, owner: policyOwnerAddr ?? (policyOwnerAddr = await ops.policyOwner()), address: deployment?.policy, trades: tradesFor().map(toTrade), categories: CATEGORY_BITS };
+    return { live: true, policy: p, agent: agentAccount?.address, owner: await ownerOf(), address: deployment?.policy, trades: tradesFor().map(toTrade), categories: CATEGORY_BITS };
   });
   // Policy writes are signed by the owner's own wallet in the browser; the engine holds no key that can call setPolicy/setPaused.
   // Local anvil only: a JSON-RPC passthrough so a browser wallet can reach the chain, and a one-shot gas faucet.
@@ -103,7 +108,7 @@ export async function buildServer() {
     if (network !== "local") return reply.code(404).send({ error: "faucet exists only on the local chain" });
     const { address } = z.object({ address: z.string().regex(/^0x[0-9a-fA-F]{40}$/) }).parse(req.body ?? {});
     const key = address.toLowerCase();
-    if (fauceted.has(key)) return reply.code(429).send({ error: "this address was already funded" });
+    if (fauceted.has(key) || (await publicClient.getBalance({ address: address as `0x${string}` })) >= BigInt(10) ** BigInt(17)) return reply.code(429).send({ error: "this address was already funded" });
     fauceted.add(key);
     const r = await fetch(config.chain.localRpcUrl, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "anvil_setBalance", params: [address, "0xde0b6b3a7640000"] }) });
     const j = (await r.json()) as { error?: { message: string } };

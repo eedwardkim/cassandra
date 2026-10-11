@@ -6,7 +6,7 @@ import { buildServer, capabilities, setLatestBlock } from "./server.js";
 import { computeBiasAll, discoverAndTrack, pollQuotes, setPolicyMinEdge, writeIndex } from "./ingest.js";
 import { runPipeline, councilBudgetLeft, reconcileTrades } from "./executor/index.js";
 import { resolveSettled } from "./executor/resolve.js";
-import { latestForecast, trackedContracts } from "./store.js";
+import { latestForecast, prune, trackedContracts } from "./store.js";
 import { bus } from "./bus.js";
 import { llmLive } from "./council/index.js";
 
@@ -29,6 +29,9 @@ const every = (ms: number, name: string, fn: () => Promise<unknown>) => {
 };
 
 async function main() {
+  // listen first so the health check passes while discovery and reconciliation run
+  const app = await buildServer();
+  await app.listen({ port: config.port, host: "0.0.0.0" });
   if (chainLive) {
     await ops.reconcilePending();
     await reconcileTrades().catch((e) => log("warn", `trade reconcile: ${(e as Error).message}`));
@@ -37,13 +40,12 @@ async function main() {
   }
   await discoverAndTrack().catch((e) => log("error", `discovery: ${(e as Error).message}`));
   await pollQuotes();
-  const app = await buildServer();
-  await app.listen({ port: config.port, host: "0.0.0.0" });
   table(await capabilities());
   log("info", `engine listening on :${config.port}`);
 
   every(config.quoteSeconds * 1000, "quotes", pollQuotes);
   every(10 * 60_000, "discovery", discoverAndTrack);
+  every(3600_000, "prune", async () => prune())();
   every(2 * 60_000, "rediscovery", async () => { if (trackedContracts().length < config.trackedTarget / 2) await discoverAndTrack(); });
   const indexTick = every(60_000, "index", async () => writeIndex(computeBiasAll()));
   await indexTick();
