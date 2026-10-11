@@ -16,7 +16,10 @@ export { favoriteLongshot, herding, horizonNeglect, overround, recencyShock, rou
 export const WEIGHTS: Record<SignatureKind, number> = {
   overround: 0.25, favoriteLongshot: 0.25, recencyShock: 0.2, herding: 0.1, wishfulThinking: 0.1, roundNumberAnchoring: 0.05, horizonNeglect: 0.05,
 };
-export const DETECTORS = [overround, favoriteLongshot, roundNumberAnchoring, herding, recencyShock, wishfulThinking, horizonNeglect];
+/** Live spectrometer: five detectors. wishfulThinking and horizonNeglect are implemented and tested but cut from the
+ *  live composite (docs/CUTS.md): the sandbox lists no politics/sports markets and nothing resolving 60+ days out. */
+export const DETECTORS = [overround, favoriteLongshot, roundNumberAnchoring, herding, recencyShock];
+export const ALL_DETECTORS = [...DETECTORS, wishfulThinking, horizonNeglect];
 export const FEE_BUFFER_BPS = 100;
 
 export function composite(signatures: Signature[]): number {

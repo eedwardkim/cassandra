@@ -4,6 +4,7 @@ import { config } from "./config.js";
 import { bus, log } from "./bus.js";
 import { db, schema } from "./db/index.js";
 import * as gemini from "./gemini/index.js";
+import { isLadderLeg } from "./gemini/index.js";
 import { latestForecast, latestTicks, saveBias, siblingsOf, ticksFor, trackedContracts, contractOf, eventOf } from "./store.js";
 
 const { events, contracts, ticks, indexHistory } = schema;
@@ -104,7 +105,7 @@ export function biasFor(symbol: string): BiasReport | null {
   const f = latestForecast(symbol);
   const t = tk[tk.length - 1]!;
   const report = spectrometer({
-    contract: { symbol, category: c.category as Category, expiryDate: c.expiryDate, exclusive: !!e?.exclusive },
+    contract: { symbol, category: c.category as Category, expiryDate: c.expiryDate, exclusive: !!e?.exclusive && !sibs.some((s) => isLadderLeg(s.symbol, s.label)) },
     ticks: tk,
     siblings: sibs.flatMap((s) => { const x = latest.get(s.symbol); return x ? [{ symbol: s.symbol, midBps: x.midBps }] : []; }),
     council: f && Date.now() - f.createdAt < 6 * 3600_000 ? { pBps: f.pBps, loBps: f.loBps, hiBps: f.hiBps } : null,

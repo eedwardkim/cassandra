@@ -4,7 +4,7 @@ import { desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { CATEGORY_BITS, Policy, type Capabilities } from "@cassandra/shared";
 import { config } from "./config.js";
-import { bus } from "./bus.js";
+import { bus, log } from "./bus.js";
 import { db, schema } from "./db/index.js";
 import { chainLive, chain, deployment, network, blockNumber, explorerTx, agentAccount, ownerAccount } from "./chain/index.js";
 import * as ops from "./chain/ops.js";
@@ -106,7 +106,9 @@ export async function buildServer() {
   app.post<{ Params: { symbol: string } }>("/api/run/:symbol", async (req, reply) => {
     if (!contractOf(req.params.symbol)) return reply.code(404).send({ error: "unknown symbol" });
     const force = (req.query as { force?: string }).force === "1";
-    runPipeline(req.params.symbol, { force }).catch((e) => bus.emit({ type: "log", level: "error", message: `run ${req.params.symbol}: ${(e as Error).message}`, ts: Date.now() }));
+    runPipeline(req.params.symbol, { force })
+      .then((r) => log("info", `run ${req.params.symbol}: ${r.steps.join(" → ")}`))
+      .catch((e) => log("error", `run ${req.params.symbol}: ${(e as Error).message}`));
     return reply.code(202).send({ started: true, symbol: req.params.symbol });
   });
   app.get("/api/events/recent", async () => bus.recent());

@@ -53,6 +53,9 @@ function quoteFromPrices(symbol: string, k: RawContract, ts: number): Quote | nu
   return { symbol, bidBps: bid, askBps: ask, noAskBps: noAsk, midBps: mid, lastBps: last, volume: null, ts, source: geminiSource };
 }
 
+/** Strike-ladder legs ("$1.40 or above") nest inside each other, so their YES prices legitimately sum past 100%. */
+export const isLadderLeg = (symbol: string, label: string) => /-(HI|LO)[0-9]/.test(symbol) || /or (above|below|higher|lower)|above|below/i.test(label);
+
 function mapEvent(e: RawEvent, ts: number): DiscoveredEvent {
   const category = mapCategory(e.category, e.title);
   const contracts = (e.contracts ?? []).filter((k) => k.instrumentSymbol).map((k) => ({
@@ -65,7 +68,7 @@ function mapEvent(e: RawEvent, ts: number): DiscoveredEvent {
     ticker: e.ticker ?? "", title: e.title ?? e.ticker ?? "", description: e.description ?? null, category, rawCategory: e.category ?? "",
     status: String(e.status ?? "active"), volume: Number(e.volume ?? 0) || 0, expiryDate: e.expiryDate ?? null,
     // Strike ladders ("BTC above X") are nested, not mutually exclusive; categorical events are.
-    exclusive: String(e.type ?? "").toLowerCase() === "categorical" && !(e.contracts ?? []).some((k) => k.strike || /-(HI|LO)\d/.test(k.instrumentSymbol ?? "")), contracts,
+    exclusive: String(e.type ?? "").toLowerCase() === "categorical" && !contracts.some((k) => isLadderLeg(k.symbol, k.label)), contracts,
   };
 }
 
