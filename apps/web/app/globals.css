@@ -20,7 +20,7 @@
 
 :root { color-scheme: dark; }
 html, body { background: var(--color-bg); color: var(--color-ink); }
-body { font-family: var(--font-sans); -webkit-font-smoothing: antialiased; min-height: 100dvh; }
+body { overflow-x: clip; font-family: var(--font-sans); -webkit-font-smoothing: antialiased; min-height: 100dvh; }
 .num { font-variant-numeric: tabular-nums; }
 .mono { font-family: var(--font-mono); }
 .display { font-weight: 600; letter-spacing: -0.02em; }

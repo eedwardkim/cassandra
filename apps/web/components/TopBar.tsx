@@ -33,7 +33,7 @@ export function TopBar() {
   };
   const net = caps?.chain.network === "bscTestnet" ? "BSC Testnet" : caps?.chain.network === "local" ? "Local chain" : "Chain";
   return (
-    <header className="sticky top-0 z-40 border-b border-hairline bg-bg/95 backdrop-blur">
+    <header className="sticky top-0 z-40 w-full max-w-full overflow-x-clip border-b border-hairline bg-bg/95 backdrop-blur">
       <div className="flex h-14 items-center gap-6 px-4 sm:px-5">
         <Link href="/" className="flex items-center gap-2 text-[1.15rem] font-semibold tracking-tight"><Logo />Cassandra</Link>
         <nav className="flex gap-1 text-sm font-medium">
@@ -77,7 +77,7 @@ function Strip() {
   const rows = ms.filter((m) => m.tick).sort((a, b) => b.depth - a.depth).slice(0, 16);
   if (!rows.length) return null;
   return (
-    <div className="flex h-9 items-center gap-6 overflow-x-auto border-t border-hairline px-4 text-xs [scrollbar-width:none] sm:px-5">
+    <div className="flex h-9 w-full min-w-0 max-w-full items-center gap-6 overflow-x-auto border-t border-hairline px-4 text-xs [scrollbar-width:none] sm:px-5">
       {rows.map((m) => {
         const gap = m.councilBps != null && m.tick ? (m.councilBps - m.tick.midBps) / 100 : null;
         return (
