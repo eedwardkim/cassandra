@@ -100,8 +100,8 @@ function Reliability({ rows }: { rows: LedgerRow[] }) {
     const inBin = rows.filter((r) => Math.min(9, Math.floor(r.pBps / 1000)) === i);
     return { i, n: inBin.length, obs: inBin.length ? inBin.filter((r) => r.outcomeYes).length / inBin.length : null };
   });
-  const x = d3.scaleLinear().domain([0, 1]).range([m, w - 6]);
-  const y = d3.scaleLinear().domain([0, 1]).range([h - m, 6]);
+  const x = d3.scaleLinear().domain([0, 1]).range([m, w - 24]);
+  const y = d3.scaleLinear().domain([0, 1]).range([h - m, 24]);
   if (!rows.length) return <div className="grid h-[200px] place-items-center text-xs text-muted">Fills in as markets resolve</div>;
   return (
     <svg viewBox={`0 0 ${w} ${h}`} className="w-full">
