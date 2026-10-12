@@ -2,9 +2,10 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { api, blocked, pct, usd, BIAS_NAMES, type MarketDetail, type Commit, type Trade, offline, runError } from "@/lib/api";
+import { api, blocked, marketLabel, pct, usd, BIAS_NAMES, type MarketDetail, type Commit, type Trade, offline, runError } from "@/lib/api";
 import { useEvents, useStream } from "@/components/stream";
 import { PriceChart } from "@/components/PriceChart";
+import { OrderBook } from "@/components/OrderBook";
 import { CouncilChamber } from "@/components/Council";
 import { SealTimeline } from "@/components/Seal";
 import { Badge, Hash, Num, Panel, page } from "@/components/ui";
@@ -15,6 +16,7 @@ export function Dossier({ symbol }: { symbol: string }) {
   const [d, setD] = useState<MarketDetail | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [live, setLive] = useState<Record<string, string>>({});
+  const [tab, setTab] = useState<"forecast" | "bias" | "trades">("forecast");
   const [running, setRunning] = useState(false);
   const [policy, setPolicy] = useState<{ ok: boolean; reason: string; edgeBps: number; notionalCents: number } | null>(null);
   const [runErr, setRunErr] = useState<string | null>(null);
@@ -54,35 +56,74 @@ export function Dossier({ symbol }: { symbol: string }) {
   const tradedSide = trade && d?.forecast && trade.forecastId === d.forecast.id ? trade.outcome : undefined;
   const side = tradedSide ? (tradedSide === "yes" ? "YES" : "NO") : d?.forecast && d.tick ? (d.forecast.pBps >= d.tick.midBps ? "YES" : "NO") : null;
   const gap = d?.forecast && d.tick ? (d.forecast.pBps - d.tick.midBps) / 100 : null;
+  const closes = d?.expiryDate ? new Date(d.expiryDate).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : null;
+  const tabs = [["forecast", "Forecast"], ["bias", "Price biases"], ["trades", `Trades (${d?.trades.length ?? 0})`]] as const;
   return (
-    <motion.div {...page} className="mx-auto max-w-[1280px] px-4 pb-16 pt-6 sm:px-6">
-      <Link href="/" className="text-sm text-muted hover:text-ink">Markets <span className="mx-1">/</span> <span className="capitalize">{d?.category ?? "…"}</span></Link>
-      <div className="mt-2 flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="display fluid-h1">{d?.title ?? <span className="skeleton inline-block h-8 w-80 rounded" />}</h1>
-          <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted"><span className="font-medium text-ink">{d?.label}</span>{d?.expiryDate && <span>· resolves {new Date(d.expiryDate).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>}{d && d.source !== "live" && <Badge kind="fixture">{d.source}</Badge>}</div>
+    <motion.div {...page} className="px-3 pb-10 pt-3 sm:px-4">
+      <div className="flex flex-wrap items-center gap-x-8 gap-y-2 rounded-md border border-hairline bg-surface px-4 py-2.5">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-surface-2 text-[0.6rem] font-semibold">{d?.eventTicker.match(/^[A-Z]+/)?.[0]?.slice(0, 4) ?? ""}</span>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 text-[0.95rem] font-semibold leading-tight">{d ? marketLabel(d.symbol) : <span className="skeleton inline-block h-4 w-24 rounded" />}{d && d.source !== "live" && <Badge kind="fixture">{d.source}</Badge>}</div>
+            <Link href="/" className="block max-w-[300px] truncate text-xs text-muted hover:text-ink">{d?.title ?? "…"}</Link>
+          </div>
         </div>
+        <Stat k="Market"><Num value={d?.tick ? d.tick.midBps / 100 : null} format={(v) => `${v.toFixed(1)}%`} /></Stat>
+        <Stat k="Cassandra"><Num value={d?.forecast ? d.forecast.pBps / 100 : null} format={(v) => `${v.toFixed(1)}%`} className="text-oracle" /></Stat>
+        <Stat k="Gap"><span className={gap == null ? "text-muted" : gap > 0 ? "text-long" : "text-short"}>{gap != null ? `${gap > 0 ? "+" : ""}${gap.toFixed(1)} pts` : "—"}</span></Stat>
+        <Stat k="Bid / Ask"><span className="text-long">{d?.tick?.bidBps != null ? (d.tick.bidBps / 100).toFixed(1) : "—"}</span><span className="text-muted"> / </span><span className="text-short">{d?.tick?.askBps != null ? (d.tick.askBps / 100).toFixed(1) : "—"}</span></Stat>
+        {d?.forecast && <Stat k="80% range">{pct(d.forecast.loBps, 0)} – {pct(d.forecast.hiBps, 0)}</Stat>}
+        <Stat k="Irrationality"><Num value={d?.irrationality} format={(v) => v.toFixed(0)} /><span className="text-muted">/100</span></Stat>
+        {closes && <Stat k="Resolves">{closes}</Stat>}
       </div>
-      {runErr && <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-refused">{runError(runErr)}{d?.forecast && <span className="text-muted"> Below is the previous forecast from {new Date(d.forecast.createdAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}.</span>}</div>}
+      {runErr && <div className="mt-2 rounded-md border border-refused/30 bg-refused/10 px-3 py-2 text-sm text-refused">{runError(runErr)}{d?.forecast && <span className="text-muted"> Below is the previous forecast from {new Date(d.forecast.createdAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}.</span>}</div>}
 
-      <div className="mt-6 grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="space-y-5">
-          <Panel>
-            <div className="flex flex-wrap gap-8 px-5 pt-5">
-              <div><div className="text-xs text-muted">Market says</div><Num value={d?.tick ? d.tick.midBps / 100 : null} format={(v) => `${v.toFixed(1)}%`} className="text-3xl font-semibold text-crowd" /></div>
-              <div><div className="text-xs text-muted">Cassandra says</div><Num value={d?.forecast ? d.forecast.pBps / 100 : null} format={(v) => `${v.toFixed(1)}%`} className="text-3xl font-semibold text-oracle" /></div>
-              {d?.forecast && <div><div className="text-xs text-muted">80% range</div><div className="num pt-2 text-sm font-medium">{pct(d.forecast.loBps, 0)} – {pct(d.forecast.hiBps, 0)}</div></div>}
-              <div><div className="text-xs text-muted">Irrationality</div><div className="pt-1 text-xl font-semibold"><Num value={d?.irrationality} format={(v) => v.toFixed(0)} /><span className="text-sm text-muted"> / 100</span></div></div>
+      <div className="mt-2 grid gap-2 xl:grid-cols-[minmax(0,1fr)_260px_340px]">
+        <Panel className="min-w-0" title={<span className="flex items-center gap-4"><span>Price</span><span className="flex items-center gap-1.5 text-xs font-normal text-muted"><span className="h-2 w-2 rounded-sm bg-long" />Market mid</span><span className="flex items-center gap-1.5 text-xs font-normal text-muted"><span className="h-0 w-3 border-t border-dashed border-oracle" />Cassandra</span></span>}>
+          <div className="px-2 py-2"><PriceChart ticks={d?.ticks ?? []} forecast={d?.forecast ?? null} bias={d?.bias ?? null} /></div>
+        </Panel>
+        <Panel className="min-w-0" title="Order book" right={<span className="text-xs text-muted">YES</span>}>
+          {d && <OrderBook symbol={d.symbol} />}
+        </Panel>
+
+        <div className="space-y-2 xl:row-span-2">
+          <Panel title="Trade" right={trade?.source && trade.source !== "live" ? <Badge kind="fixture">{trade.source}</Badge> : null}>
+            <div className="p-4">
+              <div className="grid grid-cols-2 gap-1 rounded-md bg-surface-2 p-1">
+                <div className={`rounded px-3 py-2 text-center text-sm font-semibold ${side === "YES" ? "bg-long text-bg" : "text-muted"}`}>Buy YES</div>
+                <div className={`rounded px-3 py-2 text-center text-sm font-semibold ${side === "NO" ? "bg-short text-white" : "text-muted"}`}>Buy NO</div>
+              </div>
+              <dl className="mt-4 space-y-2 text-[0.82rem]">
+                <Row k="Gap vs market">{gap != null ? `${gap > 0 ? "+" : ""}${gap.toFixed(1)} pts` : "—"}</Row>
+                <Row k="Edge after spread and fees">{tradePolicy ? pts(tradePolicy.edgeBps) : d?.bias ? pts(d.bias.edgeBps) : "—"}</Row>
+                <Row k="Order size">{usd(tradePolicy?.notionalCents)}</Row>
+                {!trade && <Row k="Trade"><span className={tradePolicy ? (tradePolicy.ok ? "text-scored" : "text-refused") : "text-muted"}>{tradePolicy ? (tradePolicy.ok ? "Approved on-chain" : blocked(tradePolicy.reason)) : d?.forecast ? "None for this forecast" : "No forecast yet"}</span></Row>}
+                {trade?.orderId && <Row k="Fill">{trade.orderStatus ?? "sent"} · {trade.filledQuantity ?? "0"} of {trade.quantity} {trade.outcome.toUpperCase()} @ {pct(trade.priceBps, 0)}</Row>}
+              </dl>
+              {trade && <div className="mt-4 border-t border-hairline pt-3"><Steps t={trade} explorer={explorer} /></div>}
+              {trade?.error && trade.state !== "refused" && <p className="mt-3 text-xs text-refused">{trade.error}</p>}
+              <button onClick={run} disabled={running || caps?.llm.mode !== "live"} className="mt-4 w-full rounded-md bg-long px-4 py-3 text-sm font-semibold text-bg transition-colors hover:bg-long/85 disabled:opacity-50">{running ? "Running forecast…" : "Run a new forecast"}</button>
+              {caps?.llm.mode !== "live" && <p className="mt-2 text-center text-xs text-muted">LLM is in dry-run; no forecasts are generated.</p>}
+              <p className="mt-3 text-[0.7rem] leading-snug text-muted">Orders go to the Gemini sandbox from one shared demo account, only after the spending-limits contract approves them.</p>
             </div>
-            <div className="px-3 pb-3"><PriceChart ticks={d?.ticks ?? []} forecast={d?.forecast ?? null} bias={d?.bias ?? null} /></div>
           </Panel>
 
-          <Panel title="The debate" right={d?.forecast && <a href={`${process.env.NEXT_PUBLIC_ENGINE_URL ?? "http://localhost:4000"}/api/forecasts/${d.forecast.id}`} className="text-xs text-muted hover:text-ink" target="_blank" rel="noreferrer">Raw JSON</a>}>
-            <div className="p-4 pt-2"><CouncilChamber forecast={d?.forecast ?? null} live={live} running={running} /></div>
+          <Panel title="On-chain record" right={commit?.replay ? <Badge kind="replay">replay</Badge> : caps?.chain.network === "local" ? <Badge kind="fixture">local chain</Badge> : null}>
+            <div className="px-4 pb-4 pt-3 text-sm"><SealTimeline commit={commit} explorer={explorer} /></div>
+            {commit && <div className="border-t border-hairline px-4 py-2.5 text-xs text-muted">Reasoning hash <Hash value={commit.reasoningHash} /></div>}
           </Panel>
+        </div>
 
-          <Panel title="Why the price may be off">
-            <ul className="divide-y divide-hairline px-5 pb-2">
+        <section className="min-w-0 rounded-md border border-hairline bg-surface xl:col-span-2">
+          <div className="flex items-center justify-between gap-3 border-b border-hairline px-4">
+            <div className="flex gap-5">
+              {tabs.map(([k, label]) => <button key={k} onClick={() => setTab(k)} className={`-mb-px border-b-2 py-2.5 text-sm ${tab === k ? "border-ink font-medium text-ink" : "border-transparent text-muted hover:text-ink"}`}>{label}</button>)}
+            </div>
+            {tab === "forecast" && d?.forecast && <a href={`${process.env.NEXT_PUBLIC_ENGINE_URL ?? "http://localhost:4000"}/api/forecasts/${d.forecast.id}`} className="text-xs text-muted hover:text-ink" target="_blank" rel="noreferrer">Raw JSON</a>}
+          </div>
+          {tab === "forecast" && <div className="p-3"><CouncilChamber forecast={d?.forecast ?? null} live={live} running={running} /></div>}
+          {tab === "bias" && (
+            <ul className="divide-y divide-hairline px-4">
               {!d?.bias && <li className="py-3 text-sm text-muted">Waiting for enough price history.</li>}
               {d?.bias?.signatures.map((s) => (
                 <li key={s.kind} className="py-3">
@@ -92,38 +133,35 @@ export function Dossier({ symbol }: { symbol: string }) {
                 </li>
               ))}
             </ul>
-          </Panel>
-        </div>
-
-        <div className="space-y-5 lg:sticky lg:top-20 lg:h-fit">
-          <Panel title="Trade" right={trade?.source && trade.source !== "live" ? <Badge kind="fixture">{trade.source}</Badge> : null}>
-            <div className="px-5 pb-5">
-              <div className="mt-2 grid grid-cols-2 gap-2">
-                <div className={`rounded-lg px-3 py-2.5 text-center text-sm font-semibold ${side === "YES" ? "bg-emerald-50 text-scored ring-1 ring-emerald-200" : "bg-surface-2 text-muted"}`}>Buy YES</div>
-                <div className={`rounded-lg px-3 py-2.5 text-center text-sm font-semibold ${side === "NO" ? "bg-red-50 text-refused ring-1 ring-red-200" : "bg-surface-2 text-muted"}`}>Buy NO</div>
-              </div>
-              <dl className="mt-4 space-y-2.5 text-sm">
-                <Row k="Gap vs market">{gap != null ? `${gap > 0 ? "+" : ""}${gap.toFixed(1)} pts` : "—"}</Row>
-                <Row k="Edge after spread and fees">{tradePolicy ? pts(tradePolicy.edgeBps) : d?.bias ? pts(d.bias.edgeBps) : "—"}</Row>
-                <Row k="Order size">{usd(tradePolicy?.notionalCents)}</Row>
-                {!trade && <Row k="Trade"><span className={tradePolicy ? (tradePolicy.ok ? "text-scored" : "text-refused") : "text-muted"}>{tradePolicy ? (tradePolicy.ok ? "Approved on-chain" : blocked(tradePolicy.reason)) : d?.forecast ? "None for this forecast" : "No forecast yet"}</span></Row>}
-                {trade?.orderId && <Row k="Fill">{trade.orderStatus ?? "sent"} · {trade.filledQuantity ?? "0"} of {trade.quantity} {trade.outcome.toUpperCase()} @ {pct(trade.priceBps, 0)}</Row>}
-              </dl>
-              {trade && <div className="mt-4 border-t border-hairline pt-4"><Steps t={trade} explorer={explorer} /></div>}
-              {trade?.error && trade.state !== "refused" && <p className="mt-3 text-xs text-refused">{trade.error}</p>}
-              <button onClick={run} disabled={running || caps?.llm.mode !== "live"} className="mt-5 w-full rounded-lg bg-ink px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-ink/85 disabled:opacity-50">{running ? "Running forecast…" : "Run a new forecast"}</button>
-              {caps?.llm.mode !== "live" && <p className="mt-2 text-center text-xs text-muted">LLM is in dry-run; no forecasts are generated.</p>}
+          )}
+          {tab === "trades" && (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[620px] text-[0.8rem]">
+                <thead><tr className="text-left text-[0.7rem] text-muted">{["Time", "Side", "Size", "Edge", "Gemini order", "Status"].map((h) => <th key={h} className="px-4 py-2 font-normal">{h}</th>)}</tr></thead>
+                <tbody className="divide-y divide-hairline">
+                  {!d?.trades.length && <tr><td colSpan={6} className="px-4 py-6 text-center text-muted">No trades on this market yet.</td></tr>}
+                  {d?.trades.map((t) => (
+                    <tr key={t.id}>
+                      <td className="num px-4 py-2 text-muted">{new Date(t.createdAt).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</td>
+                      <td className={`px-4 py-2 font-medium ${t.outcome === "yes" ? "text-long" : "text-short"}`}>{t.outcome.toUpperCase()}</td>
+                      <td className="num px-4 py-2">{t.quantity} @ {pct(t.priceBps, 0)} <span className="text-muted">· {usd(t.notionalCents)}</span></td>
+                      <td className="num px-4 py-2">{pts(t.edgeBps)}</td>
+                      <td className="mono px-4 py-2 text-xs">{t.orderId ?? <span className="text-muted">—</span>}</td>
+                      <td className={`px-4 py-2 ${t.state === "refused" ? "text-refused" : t.state === "failed" ? "text-refused" : "text-ink"}`}>{t.state === "refused" ? "Blocked by your limits" : t.orderStatus ?? t.state}{t.filledQuantity && Number(t.filledQuantity) > 0 ? ` · ${t.filledQuantity} filled` : ""}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          </Panel>
-
-          <Panel title="On-chain record" right={commit?.replay ? <Badge kind="replay">replay</Badge> : caps?.chain.network === "local" ? <Badge kind="fixture">local chain</Badge> : null}>
-            <div className="px-5 pb-4 pt-2 text-sm"><SealTimeline commit={commit} explorer={explorer} /></div>
-            {commit && <div className="border-t border-hairline px-5 py-3 text-xs text-muted">Reasoning hash <Hash value={commit.reasoningHash} /></div>}
-          </Panel>
-        </div>
+          )}
+        </section>
       </div>
     </motion.div>
   );
+}
+
+function Stat({ k, children }: { k: string; children: React.ReactNode }) {
+  return <div className="shrink-0"><div className="text-[0.68rem] text-muted">{k}</div><div className="num text-[0.85rem] font-medium">{children}</div></div>;
 }
 
 function Steps({ t, explorer }: { t: Trade; explorer: string | null }) {

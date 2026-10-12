@@ -11,7 +11,7 @@ export function WaxSeal({ stampKey }: { stampKey: string | null }) {
     <div className="relative h-24 w-24" key={stampKey}>
       {!reduce && <motion.span className="absolute inset-0 rounded-full border border-oracle" initial={{ scale: 0.8, opacity: 0.9 }} animate={{ scale: 1.9, opacity: 0 }} transition={{ duration: 0.6, delay: 0.25, ease: "easeOut" }} />}
       <motion.svg viewBox="0 0 100 100" className="absolute inset-0" initial={reduce ? false : { scale: 1.8, opacity: 0, rotate: -18 }} animate={{ scale: 1, opacity: 1, rotate: 0 }} transition={{ duration: 0.3, ease: [0.6, 0, 0.9, 0.5] }}>
-        <defs><radialGradient id="wax" cx="40%" cy="35%"><stop offset="0" stopColor="#FFCB6B" /><stop offset="0.6" stopColor="#E5530A" /><stop offset="1" stopColor="#9C6512" /></radialGradient></defs>
+        <defs><radialGradient id="wax" cx="40%" cy="35%"><stop offset="0" stopColor="#FFCB6B" /><stop offset="0.6" stopColor="#f0c14b" /><stop offset="1" stopColor="#9C6512" /></radialGradient></defs>
         <path d="M50 4 C62 6 66 2 74 10 C84 14 86 22 92 30 C96 40 94 46 96 54 C94 66 90 72 84 80 C76 88 70 90 60 94 C50 98 42 94 32 92 C22 88 16 82 10 74 C4 64 6 56 4 46 C6 36 8 28 16 20 C24 10 34 8 50 4 Z" fill="url(#wax)" />
         <circle cx="50" cy="50" r="30" fill="none" stroke="#7A4E0E" strokeWidth="1.2" opacity="0.6" />
         <text x="50" y="62" textAnchor="middle" fontSize="34" fontStyle="italic" fill="#7A4E0E" fontFamily="Georgia, serif">C</text>

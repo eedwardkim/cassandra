@@ -9,7 +9,7 @@ import { db, schema } from "./db/index.js";
 import { chainLive, chain, deployment, network, blockNumber, explorerTx, agentAccount, publicClient } from "./chain/index.js";
 import * as ops from "./chain/ops.js";
 import { llmLive } from "./council/index.js";
-import { geminiSource } from "./gemini/index.js";
+import { bookOf, geminiSource } from "./gemini/index.js";
 import { lastDiscovery, trackEvent, depth, setPolicyMinEdge } from "./ingest.js";
 import { runPipeline } from "./executor/index.js";
 import { commitsFor, contractOf, eventOf, indexSeries, latestBias, latestForecast, latestTicks, ticksFor, toCommit, toForecast, toTrade, trackedContracts, tradesFor } from "./store.js";
@@ -62,6 +62,20 @@ export async function buildServer() {
       ticks: ticksFor(c.symbol), bias: latestBias(c.symbol), forecast: latestForecast(c.symbol),
       commits: commitsFor(c.symbol).filter((r) => r.network === network).map(toCommit), trades: tradesFor(c.symbol).map(toTrade),
     };
+  });
+  const bookCache = new Map<string, { at: number; book: Awaited<ReturnType<typeof bookOf>> }>();
+  app.get<{ Params: { symbol: string } }>("/api/markets/:symbol/book", async (req, reply) => {
+    const c = contractOf(req.params.symbol);
+    if (!c) return reply.code(404).send({ error: "unknown symbol" });
+    const hit = bookCache.get(c.symbol);
+    if (hit && Date.now() - hit.at < 3000) return hit.book ?? { symbol: c.symbol, bids: [], asks: [], ts: hit.at, source: geminiSource };
+    try {
+      const book = await bookOf(c.symbol);
+      bookCache.set(c.symbol, { at: Date.now(), book });
+      return book ?? { symbol: c.symbol, bids: [], asks: [], ts: Date.now(), source: geminiSource };
+    } catch (e) {
+      return reply.code(502).send({ error: `order book unavailable: ${(e as Error).message}` });
+    }
   });
   app.get<{ Params: { id: string } }>("/api/forecasts/:id", async (req, reply) => {
     const r = db.select().from(schema.forecasts).where(eq(schema.forecasts.id, req.params.id)).get();

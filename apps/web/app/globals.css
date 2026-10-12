@@ -1,22 +1,24 @@
 @import "tailwindcss";
 
 @theme {
-  --color-bg: #f7f8fa;
-  --color-surface: #ffffff;
-  --color-surface-2: #f2f4f7;
-  --color-hairline: #e4e7ec;
-  --color-ink: #0e1116;
-  --color-muted: #667085;
-  --color-oracle: #e5530a;
-  --color-crowd: #3b5bdb;
-  --color-refused: #d92d20;
-  --color-scored: #079455;
+  --color-bg: #0a0a0a;
+  --color-surface: #131316;
+  --color-surface-2: #1c1c21;
+  --color-hairline: #2a2a2e;
+  --color-ink: #fafafa;
+  --color-muted: #a1a1aa;
+  --color-oracle: #f0c14b;
+  --color-crowd: #8b80f9;
+  --color-long: #1cada6;
+  --color-short: #ef4444;
+  --color-refused: #ef4444;
+  --color-scored: #1cada6;
   --font-display: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 }
 
-:root { color-scheme: light; }
+:root { color-scheme: dark; }
 html, body { background: var(--color-bg); color: var(--color-ink); }
 body { font-family: var(--font-sans); -webkit-font-smoothing: antialiased; min-height: 100dvh; }
 .num { font-variant-numeric: tabular-nums; }
@@ -27,12 +29,17 @@ body { font-family: var(--font-sans); -webkit-font-smoothing: antialiased; min-h
 .fluid-h1 { font-size: clamp(1.4rem, 2.2vw, 1.9rem); line-height: 1.15; }
 .label { font-size: 0.75rem; color: var(--color-muted); }
 
-::selection { background: rgba(229, 83, 10, 0.18); }
+::selection { background: rgba(28, 173, 166, 0.3); }
 :focus-visible { outline: 2px solid var(--color-oracle); outline-offset: 2px; }
-.skeleton { background: linear-gradient(90deg, #eef0f3, #f6f7f9, #eef0f3); background-size: 200% 100%; animation: shimmer 1.6s linear infinite; }
+.skeleton { background: linear-gradient(90deg, #17171b, #202026, #17171b); background-size: 200% 100%; animation: shimmer 1.6s linear infinite; }
 @keyframes shimmer { to { background-position: -200% 0; } }
 .caret::after { content: ""; display: inline-block; width: 0.5ch; height: 1em; margin-left: 1px; vertical-align: -0.15em; background: var(--color-oracle); animation: blink 1s steps(1) infinite; }
 @keyframes blink { 50% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
 }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: #2a2a2e; border-radius: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+input[type="range"] { accent-color: var(--color-long); }

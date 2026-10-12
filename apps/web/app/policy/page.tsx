@@ -38,7 +38,7 @@ export default function PolicyPage() {
   const dirty = !!draft && !!s?.policy && JSON.stringify(draft) !== JSON.stringify(s.policy);
 
   return (
-    <motion.div {...page} className="mx-auto max-w-[1300px] px-4 pb-12 pt-6 sm:px-6">
+    <motion.div {...page} className="px-3 pb-10 pt-4 sm:px-4">
       <h1 className="text-2xl font-semibold tracking-tight">Spending limits</h1>
       <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-muted">Each trade is checked against these limits on-chain before an order goes to Gemini. Only the owner wallet can change them.</p>
       {err && <div className="mt-4 text-sm text-refused">{offline(err)}</div>}
@@ -50,7 +50,7 @@ export default function PolicyPage() {
             <div className="space-y-5 p-4">
               <div className="flex items-center justify-between gap-3 rounded-lg bg-surface-2 px-3 py-2.5 text-sm">
                 {w.address ? <span className="min-w-0 truncate">Connected <span className="mono">{short(w.address)}</span>{isOwner && <span className="ml-2 text-scored">owner</span>}</span> : <span className="text-muted">Owner wallet not connected</span>}
-                {!w.address && <button onClick={() => connectWallet(caps?.chain.network)} className="shrink-0 rounded-md bg-ink px-3 py-1.5 text-xs font-medium text-white hover:bg-ink/85">Connect wallet</button>}
+                {!w.address && <button onClick={() => connectWallet(caps?.chain.network)} className="shrink-0 rounded-md bg-long px-3 py-1.5 text-xs font-semibold text-bg hover:bg-long/85">Connect wallet</button>}
               </div>
               {w.error && <p className="text-xs text-refused">{w.error}</p>}
               {locked && s?.owner && <p className="text-xs text-muted">Only the owner {short(s.owner)} can change these limits.</p>}
@@ -69,12 +69,12 @@ export default function PolicyPage() {
                 </div>
               </div>
               <label className="flex items-center justify-between text-sm"><span>Pause agent</span>
-                <button role="switch" aria-checked={draft.paused} onClick={() => setDraft({ ...draft, paused: !draft.paused })} className={`relative h-5 w-9 rounded-full border ${draft.paused ? "border-refused/60 bg-refused/20" : "border-hairline bg-black/5"}`}>
+                <button role="switch" aria-checked={draft.paused} onClick={() => setDraft({ ...draft, paused: !draft.paused })} className={`relative h-5 w-9 rounded-full border ${draft.paused ? "border-refused/60 bg-refused/20" : "border-hairline bg-white/10"}`}>
                   <motion.span layout className={`absolute top-0.5 h-3.5 w-3.5 rounded-full ${draft.paused ? "right-0.5 bg-refused" : "left-0.5 bg-muted"}`} />
                 </button>
               </label>
               </fieldset>
-              <button onClick={submit} disabled={locked || !dirty || tx.state === "pending" || !s?.live} className="w-full rounded-lg bg-ink py-2.5 text-sm font-medium text-white hover:bg-ink/85 disabled:opacity-40">
+              <button onClick={submit} disabled={locked || !dirty || tx.state === "pending" || !s?.live} className="w-full rounded-lg bg-ink py-2.5 text-sm font-medium text-bg hover:bg-ink/85 disabled:opacity-40">
                 {tx.state === "pending" ? "Confirm in your wallet…" : "Save limits (sign in wallet)"}
               </button>
               {tx.state === "confirmed" && <div className="text-xs text-scored">Confirmed <Hash value={tx.hash} href={explorer && tx.hash ? explorer + tx.hash : null} /></div>}
@@ -87,7 +87,7 @@ export default function PolicyPage() {
           <Panel title="Spent today (UTC)">
             <div className="p-4">
               <div className="flex items-baseline justify-between text-sm"><span className="num text-2xl">{usd(spent)}</span><span className="num text-muted">of {usd(maxDaily)}</span></div>
-              <div className="mt-2 h-1.5 overflow-hidden rounded bg-black/5"><motion.div className={`h-full ${spent > maxDaily * 0.8 ? "bg-refused" : "bg-oracle"}`} initial={{ width: 0 }} animate={{ width: `${maxDaily ? Math.min(100, (spent / maxDaily) * 100) : 0}%` }} /></div>
+              <div className="mt-2 h-1.5 overflow-hidden rounded bg-white/10"><motion.div className={`h-full ${spent > maxDaily * 0.8 ? "bg-refused" : "bg-oracle"}`} initial={{ width: 0 }} animate={{ width: `${maxDaily ? Math.min(100, (spent / maxDaily) * 100) : 0}%` }} /></div>
             </div>
           </Panel>
           <Panel title="Trade history">
@@ -128,7 +128,7 @@ function Slider({ label, value, min, max, step, fmt, onChange }: { label: string
   return (
     <label className="block">
       <div className="flex items-baseline justify-between"><span className="label">{label}</span><span className="num text-sm text-oracle">{fmt(value)}</span></div>
-      <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} className="mt-2 w-full accent-[#E5530A]" />
+      <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} className="mt-2 w-full accent-[#f0c14b]" />
     </label>
   );
 }

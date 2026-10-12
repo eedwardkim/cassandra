@@ -20,7 +20,7 @@ export default function LedgerPage() {
   const meanBrier = scored.length ? scored.reduce((s, c) => s + c.brierBps2!, 0) / scored.length / 1e8 : null;
 
   return (
-    <motion.div {...page} className="mx-auto max-w-[1300px] px-4 pb-12 pt-6 sm:px-6">
+    <motion.div {...page} className="px-3 pb-10 pt-4 sm:px-4">
       <h1 className="text-2xl font-semibold tracking-tight">Track record</h1>
       <p className="mt-2 max-w-2xl text-sm text-muted">Each forecast is recorded on-chain as a hash before the market closes, revealed after, and scored when the market resolves. Brier score: lower is better; always guessing 50% scores 0.25.</p>
       {caps?.chain.network === "local" && <div className="mt-3"><Badge kind="fixture">local anvil chain, not BSC Testnet</Badge></div>}
@@ -49,7 +49,7 @@ export default function LedgerPage() {
               {err && <tr><td colSpan={9} className="px-4 py-6 text-center text-muted">{offline(err)}</td></tr>}
               {l && l.commits.length === 0 && <tr><td colSpan={9} className="px-4 py-6 text-center text-muted">No forecasts yet.</td></tr>}
               {l?.commits.map((c, i) => (
-                <motion.tr key={c.id} initial={{ opacity: 0 }} animate={{ opacity: 1, transition: { delay: Math.min(i, 20) * 0.04 } }} className="hover:bg-black/[0.04]">
+                <motion.tr key={c.id} initial={{ opacity: 0 }} animate={{ opacity: 1, transition: { delay: Math.min(i, 20) * 0.04 } }} className="hover:bg-white/[0.03]">
                   <td className="num px-4 py-2 text-xs text-muted">{new Date(c.createdAt).toISOString().slice(5, 16).replace("T", " ")}</td>
                   <td className="max-w-[260px] px-4 py-2"><Link href={`/m/${c.symbol}`} className="block truncate hover:text-oracle">{c.title}</Link><span className="text-xs text-muted">{c.label}</span> {c.replay && <Badge kind="replay">replay</Badge>}</td>
                   <td className="num px-4 py-2 text-oracle">{pct(c.pBps)}</td>
@@ -105,10 +105,10 @@ function Reliability({ rows }: { rows: LedgerRow[] }) {
   if (!rows.length) return <div className="grid h-[200px] place-items-center text-xs text-muted">Fills in as markets resolve</div>;
   return (
     <svg viewBox={`0 0 ${w} ${h}`} className="w-full">
-      <line x1={x(0)} y1={y(0)} x2={x(1)} y2={y(1)} stroke="rgba(16,24,40,0.1)" strokeDasharray="3 3" />
-      {[0, 0.5, 1].map((v) => <g key={v}><text x={x(v)} y={h - 8} fontSize="9" fill="#667085" textAnchor="middle">{v * 100}%</text><text x={4} y={y(v) + 3} fontSize="9" fill="#667085">{v * 100}</text></g>)}
-      {bins.map((b) => b.obs != null && <circle key={b.i} cx={x((b.i + 0.5) / 10)} cy={y(b.obs)} r={3 + Math.sqrt(b.n) * 2} fill="rgba(229,83,10,0.35)" stroke="#E5530A" />)}
-      <text x={w - 8} y={h - m - 4} fontSize="9" fill="#667085" textAnchor="end">predicted</text>
+      <line x1={x(0)} y1={y(0)} x2={x(1)} y2={y(1)} stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
+      {[0, 0.5, 1].map((v) => <g key={v}><text x={x(v)} y={h - 8} fontSize="9" fill="#71717a" textAnchor={v === 1 ? "end" : v === 0 ? "start" : "middle"}>{v * 100}%</text><text x={4} y={y(v) + 3} fontSize="9" fill="#71717a">{v * 100}</text></g>)}
+      {bins.map((b) => b.obs != null && <circle key={b.i} cx={x((b.i + 0.5) / 10)} cy={y(b.obs)} r={3 + Math.sqrt(b.n) * 2} fill="rgba(240,193,75,0.35)" stroke="#f0c14b" />)}
+      <text x={w - 8} y={h - m - 4} fontSize="9" fill="#71717a" textAnchor="end">predicted</text>
     </svg>
   );
 }

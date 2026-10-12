@@ -134,6 +134,25 @@ export async function quote(symbol: string): Promise<Quote | null> {
   return { symbol, bidBps: bid, askBps: ask, noAskBps: bid != null ? 10000 - bid : null, midBps: mid, lastBps: null, volume: Math.round(depth * 100) / 100, ts, source: geminiSource };
 }
 
+export interface BookLevel { priceBps: number; amount: number }
+/** Top levels of the YES book, best first; read-only market data. */
+export async function bookOf(symbol: string, levels = 12): Promise<{ symbol: string; ts: number; source: string; bids: BookLevel[]; asks: BookLevel[] } | null> {
+  let book: Book;
+  if (config.gemini.dryRun) {
+    const all = readFixture<Record<string, Book>>("books");
+    if (!all[symbol]) return null;
+    book = all[symbol]!;
+  } else {
+    book = (await (await client()).marketData.getCurrentOrderBook({ symbol })) as unknown as Book;
+  }
+  const lv = (ls: Book["bids"]) => ls.map((l) => ({ priceBps: toBps(l.price) ?? -1, amount: Number(l.amount) })).filter((l) => l.priceBps >= 0 && l.amount > 0);
+  return {
+    symbol, ts: Date.now(), source: geminiSource,
+    bids: lv(book.bids).sort((a, b) => b.priceBps - a.priceBps).slice(0, levels),
+    asks: lv(book.asks).sort((a, b) => a.priceBps - b.priceBps).slice(0, levels),
+  };
+}
+
 export async function rawBook(symbol: string): Promise<Book> {
   return (await (await client()).marketData.getCurrentOrderBook({ symbol })) as unknown as Book;
 }

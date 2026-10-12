@@ -33,7 +33,7 @@ export function CouncilChamber({ forecast, live, running }: { forecast: Forecast
               className={`rounded-lg border bg-surface p-4 ${streaming ? "border-oracle/40" : "border-hairline"}`}>
               <header className="flex items-start justify-between gap-3">
                 <div><div className="text-sm font-semibold leading-tight">{p.name}</div><div className="mt-0.5 text-[0.7rem] text-muted">{p.role}</div></div>
-                <div className={`num rounded-md px-2 py-0.5 text-sm font-semibold ${prob != null ? "bg-orange-50 text-oracle" : "text-muted"}`}>{prob != null ? `${(prob * 100).toFixed(0)}%` : "—"}</div>
+                <div className={`num rounded-md px-2 py-0.5 text-sm font-semibold ${prob != null ? "bg-oracle/10 text-oracle" : "text-muted"}`}>{prob != null ? `${(prob * 100).toFixed(0)}%` : "—"}</div>
               </header>
               <p className={`mt-2.5 text-[0.82rem] leading-relaxed text-ink/80 ${streaming ? "caret" : ""} ${!streaming && !open[p.key] ? "line-clamp-4" : ""}`}>
                 {text || <span className="text-muted">{running ? "thinking…" : "Not run yet."}</span>}
@@ -83,11 +83,11 @@ function Dial({ p, lo, hi, market }: { p: number; lo: number; hi: number; market
   const m = pos(market);
   return (
     <svg width="96" height="96" viewBox="0 0 96 96" aria-label={`Judge ${(p * 100).toFixed(0)}%`}>
-      <circle cx="48" cy="48" r={r} stroke="rgba(16,24,40,0.1)" strokeWidth="6" fill="none" />
-      <circle cx="48" cy="48" r={r} stroke="rgba(229,83,10,0.25)" strokeWidth="6" fill="none" strokeDasharray={`${(hi - lo) * c} ${c}`} transform={`rotate(${lo * 360 - 90} 48 48)`} />
-      <motion.circle cx="48" cy="48" r={r} stroke="#E5530A" strokeWidth="2.5" fill="none" strokeLinecap="round" initial={{ strokeDasharray: `0 ${c}` }} animate={{ strokeDasharray: `${p * c} ${c}` }} transition={{ duration: 0.9, ease: "easeOut" }} transform="rotate(-90 48 48)" />
-      <circle cx={m.x} cy={m.y} r="3.5" fill="#3B5BDB" />
-      <text x="48" y="53" textAnchor="middle" className="num" fill="#0E1116" fontSize="17">{(p * 100).toFixed(0)}%</text>
+      <circle cx="48" cy="48" r={r} stroke="rgba(255,255,255,0.08)" strokeWidth="6" fill="none" />
+      <circle cx="48" cy="48" r={r} stroke="rgba(240,193,75,0.25)" strokeWidth="6" fill="none" strokeDasharray={`${(hi - lo) * c} ${c}`} transform={`rotate(${lo * 360 - 90} 48 48)`} />
+      <motion.circle cx="48" cy="48" r={r} stroke="#f0c14b" strokeWidth="2.5" fill="none" strokeLinecap="round" initial={{ strokeDasharray: `0 ${c}` }} animate={{ strokeDasharray: `${p * c} ${c}` }} transition={{ duration: 0.9, ease: "easeOut" }} transform="rotate(-90 48 48)" />
+      <circle cx={m.x} cy={m.y} r="3.5" fill="#8b80f9" />
+      <text x="48" y="53" textAnchor="middle" className="num" fill="#fafafa" fontSize="17">{(p * 100).toFixed(0)}%</text>
     </svg>
   );
 }

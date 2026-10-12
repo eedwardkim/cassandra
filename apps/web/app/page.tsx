@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { api, pct, BIAS_NAMES, type Ledger, type MarketSummary, type StreamEvent, offline } from "@/lib/api";
+import { api, pct, marketLabel, BIAS_NAMES, type Ledger, type MarketSummary, type StreamEvent, offline } from "@/lib/api";
 import { Ticker } from "@/components/Ticker";
 import { useEvents, useStream } from "@/components/stream";
 import { Badge, Num } from "@/components/ui";
@@ -59,39 +59,50 @@ export default function Home() {
   const fixture = caps && caps.gemini.mode !== "live";
 
   return (
-    <div className="mx-auto max-w-[1280px] px-4 pb-16 pt-8 sm:px-6">
-      <section className="flex flex-wrap items-end justify-between gap-6 border-b border-hairline pb-6">
-        <div className="max-w-xl">
-          <h1 className="text-2xl font-semibold tracking-tight">Markets</h1>
-          <p className="mt-1.5 text-sm leading-relaxed text-muted">Four AI models estimate a probability for each Gemini sandbox market. The combined forecast is recorded on-chain before the market closes and scored after it resolves. If it differs enough from the market price, an agent places a trade, within limits the owner sets.</p>
+    <div className="px-3 pb-10 pt-3 sm:px-4">
+      <section className="flex flex-wrap items-center gap-x-10 gap-y-3 rounded-md border border-hairline bg-surface px-4 py-3">
+        <div className="mr-auto min-w-0">
+          <h1 className="text-lg font-semibold tracking-tight">Markets</h1>
+          <p className="text-xs text-muted">Gemini sandbox prediction markets. Cassandra's forecast is recorded on-chain before each market closes.</p>
         </div>
-        <dl className="flex flex-wrap gap-x-8 gap-y-3">
-          <Stat label="Forecasts sealed" value={ledger?.counts.sealed ?? null} />
-          <Stat label="Scored on-chain" value={ledger?.onchain?.count ?? ledger?.counts.scored ?? null} />
-          <Stat label="Mean Brier" value={brier} fmt={(v) => v.toFixed(3)} />
-          <Stat label="Market irrationality" value={index} fmt={(v) => v.toFixed(0)} suffix="/100" />
-        </dl>
+        <Stat label="Forecasts sealed" value={ledger?.counts.sealed ?? null} />
+        <Stat label="Scored on-chain" value={ledger?.onchain?.count ?? ledger?.counts.scored ?? null} />
+        <Stat label="Mean Brier" value={brier} fmt={(v) => v.toFixed(3)} />
+        <Stat label="Market irrationality" value={index} fmt={(v) => v.toFixed(0)} suffix="/100" />
+        {top && <Link href={`/m/${top.symbol}`} className="rounded-md bg-long px-3 py-2 text-xs font-semibold text-bg hover:bg-long/85">Largest gap: {marketLabel(top.symbol)}</Link>}
       </section>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <section className="min-w-0">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex gap-1">
-              {cats.map((c) => <button key={c} onClick={() => setCat(c)} className={`rounded-full px-3 py-1.5 text-sm font-medium capitalize ${cat === c ? "bg-ink text-white" : "text-muted hover:bg-surface-2 hover:text-ink"}`}>{c}</button>)}
+      <div className="mt-2 grid gap-2 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <section className="min-w-0 overflow-hidden rounded-md border border-hairline bg-surface">
+          <div className="flex items-center justify-between gap-3 border-b border-hairline px-4">
+            <div className="flex gap-5">
+              {cats.map((c) => <button key={c} onClick={() => setCat(c)} className={`-mb-px border-b-2 py-2.5 text-sm capitalize ${cat === c ? "border-ink font-medium text-ink" : "border-transparent text-muted hover:text-ink"}`}>{c}</button>)}
             </div>
-            <div className="flex items-center gap-2 text-xs text-muted">
-              {fixture && <Badge kind="fixture">fixture prices</Badge>}
-              {top && <Link href={`/m/${top.symbol}`} className="rounded-lg bg-ink px-3 py-2 text-xs font-medium text-white hover:bg-ink/85">Largest gap: {asset(top.eventTicker)} {top.label}</Link>}
+            {fixture && <Badge kind="fixture">fixture prices</Badge>}
+          </div>
+          {markets === null && !err && <div className="space-y-1 p-3">{Array.from({ length: 10 }).map((_, i) => <div key={i} className="skeleton h-8 rounded" />)}</div>}
+          {err && <div className="p-8 text-center text-sm text-muted">{offline(err)}</div>}
+          {markets?.length === 0 && <div className="p-8 text-center text-sm text-muted">No markets tracked yet. The engine picks the most liquid sandbox markets on boot.</div>}
+          {groups.length > 0 && (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[760px] text-sm">
+                <thead>
+                  <tr className="text-[0.7rem] text-muted">
+                    <th className="py-2 pl-4 text-left font-normal">Market</th>
+                    <th className="py-2 text-right font-normal">Market</th>
+                    <th className="py-2 text-right font-normal">Cassandra</th>
+                    <th className="py-2 text-right font-normal">Gap</th>
+                    <th className="py-2 text-right font-normal">Bid / Ask</th>
+                    <th className="py-2 text-right font-normal">Irrationality</th>
+                    <th className="py-2 pr-4 text-right font-normal">Flag</th>
+                  </tr>
+                </thead>
+                {groups.map((g) => <EventRows key={g.ticker} g={g} />)}
+              </table>
             </div>
-          </div>
-          {markets === null && !err && <div className="grid gap-4 xl:grid-cols-2">{Array.from({ length: 4 }).map((_, i) => <div key={i} className="skeleton h-64 rounded-xl" />)}</div>}
-          {err && <div className="rounded-xl border border-hairline bg-white p-8 text-center text-sm text-muted">{offline(err)}</div>}
-          {markets?.length === 0 && <div className="rounded-xl border border-hairline bg-white p-8 text-center text-sm text-muted">No markets tracked yet. The engine picks the most liquid sandbox markets on boot.</div>}
-          <div className="grid items-start gap-4 xl:grid-cols-2">
-            {groups.map((g) => <EventCard key={g.ticker} g={g} />)}
-          </div>
+          )}
         </section>
-        <aside className="h-fit overflow-hidden rounded-xl border border-hairline bg-white lg:sticky lg:top-20">
+        <aside className="h-fit overflow-hidden rounded-md border border-hairline bg-surface lg:sticky lg:top-[6.5rem]">
           <Ticker seed={seed} />
         </aside>
       </div>
@@ -102,53 +113,39 @@ export default function Home() {
 function Stat({ label, value, fmt = (v: number) => v.toFixed(0), suffix }: { label: string; value: number | null; fmt?: (v: number) => string; suffix?: string }) {
   return (
     <div>
-      <dt className="text-xs text-muted">{label}</dt>
-      <dd className="mt-0.5 text-xl font-semibold tracking-tight"><Num value={value} format={fmt} />{suffix && value != null && <span className="ml-0.5 text-sm font-normal text-muted">{suffix}</span>}</dd>
+      <dt className="text-[0.7rem] text-muted">{label}</dt>
+      <dd className="num text-[0.95rem] font-semibold"><Num value={value} format={fmt} />{suffix && value != null && <span className="ml-0.5 text-xs font-normal text-muted">{suffix}</span>}</dd>
     </div>
   );
 }
 
-function EventCard({ g }: { g: Group }) {
-  const sig = g.markets.map((m) => m.topSignature).filter((s) => s != null).sort((a, b) => b.score - a.score)[0];
+function EventRows({ g }: { g: Group }) {
   return (
-    <article className="overflow-hidden rounded-xl border border-hairline bg-white">
-      <header className="flex items-start gap-3 px-4 pt-4 pb-3">
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-surface-2 text-[0.7rem] font-semibold">{asset(g.ticker)}</span>
-        <div className="min-w-0 flex-1">
-          <h2 className="truncate text-[0.95rem] font-semibold leading-tight">{g.title}</h2>
-          <div className="mt-0.5 flex gap-2 text-xs text-muted"><span className="capitalize">{g.category}</span><span>·</span><span>{closesIn(g.expiryDate)}</span><span>·</span><span>{g.markets.length} {g.markets.length === 1 ? "strike" : "strikes"}</span></div>
-        </div>
-      </header>
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-y border-hairline bg-surface-2/60 text-[0.7rem] text-muted">
-            <th className="py-1.5 pl-4 text-left font-medium">Strike</th>
-            <th className="py-1.5 text-left font-medium">Market</th>
-            <th className="py-1.5 text-right font-medium">Cassandra</th>
-            <th className="py-1.5 pr-4 text-right font-medium">Gap</th>
+    <tbody className="border-t border-hairline">
+      <tr className="bg-surface-2/50">
+        <td colSpan={7} className="px-4 py-1.5">
+          <div className="flex items-center gap-2.5 text-xs">
+            <span className="grid h-5 w-5 place-items-center rounded-full bg-hairline text-[0.55rem] font-semibold">{asset(g.ticker).slice(0, 3)}</span>
+            <span className="font-medium text-ink">{g.title}</span>
+            <span className="text-muted">{closesIn(g.expiryDate)}</span>
+          </div>
+        </td>
+      </tr>
+      {g.markets.map((m) => {
+        const gap = gapOf(m);
+        const t = m.tick;
+        return (
+          <tr key={m.symbol} className="group cursor-pointer hover:bg-white/[0.03]">
+            <td className="py-0 pl-4"><Link href={`/m/${m.symbol}`} className="block py-2 pl-7 font-medium group-hover:text-long">{marketLabel(m.symbol)}</Link></td>
+            <td className="num py-2 text-right"><Link href={`/m/${m.symbol}`}>{pct(t?.midBps ?? null, 1)}</Link></td>
+            <td className="num py-2 text-right"><Link href={`/m/${m.symbol}`} className={m.councilBps != null ? "text-oracle" : "text-muted/50"}>{m.councilBps != null ? pct(m.councilBps, 1) : "—"}</Link></td>
+            <td className={`num py-2 text-right ${gap == null || Math.abs(gap) < 0.5 ? "text-muted/50" : gap > 0 ? "text-long" : "text-short"}`}>{gap == null ? "—" : `${gap > 0 ? "+" : ""}${gap.toFixed(1)}`}</td>
+            <td className="num py-2 text-right text-muted"><span className="text-long">{t?.bidBps != null ? (t.bidBps / 100).toFixed(1) : "—"}</span> / <span className="text-short">{t?.askBps != null ? (t.askBps / 100).toFixed(1) : "—"}</span></td>
+            <td className="num py-2 text-right">{m.irrationality != null ? m.irrationality.toFixed(0) : "—"}</td>
+            <td className="max-w-[180px] truncate py-2 pr-4 text-right text-xs text-muted">{m.topSignature ? BIAS_NAMES[m.topSignature.kind] : ""}</td>
           </tr>
-        </thead>
-        <tbody>
-          {g.markets.map((m) => {
-            const gap = gapOf(m);
-            const mid = m.tick?.midBps ?? null;
-            return (
-              <tr key={m.symbol} className="group border-b border-hairline last:border-0">
-                <td className="py-0 pl-4"><Link href={`/m/${m.symbol}`} className="block py-2.5 font-medium group-hover:text-oracle">{m.label.replace(/ or above$/, "+")}</Link></td>
-                <td className="w-[38%] py-2.5 pr-3">
-                  <Link href={`/m/${m.symbol}`} className="flex items-center gap-2">
-                    <span className="num w-9 shrink-0 font-semibold">{pct(mid, 0)}</span>
-                    <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-2"><span className="block h-full rounded-full bg-crowd/70" style={{ width: `${(mid ?? 0) / 100}%` }} /></span>
-                  </Link>
-                </td>
-                <td className="num py-2.5 text-right"><Link href={`/m/${m.symbol}`} className={m.councilBps != null ? "font-semibold text-oracle" : "text-muted/60"}>{m.councilBps != null ? pct(m.councilBps, 0) : "—"}</Link></td>
-                <td className="num py-2.5 pr-4 text-right"><Link href={`/m/${m.symbol}`} className={gap == null || Math.abs(gap) < 0.5 ? "text-muted/60" : gap > 0 ? "font-medium text-scored" : "font-medium text-refused"}>{gap == null ? "" : `${gap > 0 ? "+" : ""}${gap.toFixed(1)}`}</Link></td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-      {sig && <footer className="border-t border-hairline px-4 py-2 text-xs text-muted">Flagged: <span className="text-ink">{BIAS_NAMES[sig.kind]}</span>{sig.magnitudeBps ? ` · ${(sig.magnitudeBps / 100).toFixed(1)} pts` : ""}</footer>}
-    </article>
+        );
+      })}
+    </tbody>
   );
 }

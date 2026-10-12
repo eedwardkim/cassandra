@@ -3,7 +3,7 @@ import { animate, motion, useMotionValue, useReducedMotion, useTransform } from 
 import { useEffect, useState } from "react";
 
 export function Badge({ kind, children }: { kind: "fixture" | "replay" | "live" | "refused" | "scored"; children: React.ReactNode }) {
-  const c = { fixture: "bg-amber-50 text-amber-800 ring-amber-200", replay: "bg-indigo-50 text-indigo-700 ring-indigo-200", live: "bg-surface-2 text-muted ring-hairline", refused: "bg-red-50 text-refused ring-red-200", scored: "bg-emerald-50 text-scored ring-emerald-200" }[kind];
+  const c = { fixture: "bg-oracle/10 text-oracle ring-oracle/30", replay: "bg-crowd/10 text-crowd ring-crowd/30", live: "bg-surface-2 text-muted ring-hairline", refused: "bg-refused/10 text-refused ring-refused/30", scored: "bg-scored/10 text-scored ring-scored/30" }[kind];
   return <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[0.7rem] font-medium ring-1 ring-inset ${c}`}>{children}</span>;
 }
 
@@ -39,8 +39,8 @@ export function Hash({ value, href }: { value?: string | null; href?: string | n
 
 export function Panel({ title, right, children, className = "" }: { title?: React.ReactNode; right?: React.ReactNode; children: React.ReactNode; className?: string }) {
   return (
-    <section className={`hair rounded-xl bg-surface ${className}`}>
-      {title && <div className="flex items-center justify-between gap-3 px-5 pt-4 pb-1"><h2 className="text-[0.95rem] font-semibold">{title}</h2>{right}</div>}
+    <section className={`hair rounded-md bg-surface ${className}`}>
+      {title && <div className="flex items-center justify-between gap-3 border-b border-hairline px-4 py-2.5"><h2 className="text-sm font-medium">{title}</h2>{right}</div>}
       {children}
     </section>
   );
